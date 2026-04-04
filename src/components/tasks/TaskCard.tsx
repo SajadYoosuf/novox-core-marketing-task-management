@@ -67,6 +67,10 @@ export function TaskCard({ task, onClick, onTalentClick }: TaskCardProps) {
     >
       <div
         className="block overflow-hidden rounded-[2rem] border border-[var(--color-border)] bg-[#0B0D13]/80 backdrop-blur-xl p-5 shadow-2xl shadow-black/20 transition-all duration-500 hover:border-[var(--color-accent)]/40 hover:shadow-indigo-500/5 active:scale-[0.98]"
+        onClick={(e) => {
+          e.stopPropagation()
+          onClick()
+        }}
       >
         {/* Content Type Ribbon */}
         <div className="mb-4 flex items-center justify-between">

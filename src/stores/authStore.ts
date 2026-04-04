@@ -68,33 +68,52 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!supabaseConfigured) {
       return { error: new Error('Supabase is not configured') }
     }
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('email', email.trim().toLowerCase())
-      .eq('password', password)
-      .maybeSingle()
-    if (error) return { error: error as Error }
-    if (!data) return { error: new Error('Invalid email or password.') }
-    set({ profile: data as Profile, user: { id: data.id, email: data.email } as any })
-    localStorage.setItem('ag_user_profile', JSON.stringify(data))
-    return { error: null }
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      })
+
+      if (error) {
+        console.error('Sign-in error:', error)
+        return { error: error as Error }
+      }
+
+      if (data.user) {
+        await get().fetchProfile(data.user.id)
+        return { error: null }
+      }
+      return { error: new Error('Invalid email or password.') }
+    } catch (err) {
+      console.error('Unexpected sign-in error:', err)
+      return { error: err as Error }
+    }
   },
 
   signUp: async (email, password, fullName) => {
     if (!supabaseConfigured) {
       return { error: new Error('Supabase is not configured') }
     }
-    const { data: { user } } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName, password } },
-    })
-    if (user) {
-      // The trigger will handle the insertion into public.profiles
-      return { error: null }
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName } },
+      })
+
+      if (error) {
+        console.error('Sign-up error:', error)
+        return { error: error as Error }
+      }
+
+      if (data.user) {
+        return { error: null }
+      }
+      return { error: new Error('Failed to create account.') }
+    } catch (err) {
+      console.error('Unexpected sign-up error:', err)
+      return { error: err as Error }
     }
-    return { error: new Error('Failed to create account.') }
   },
 
   signOut: async () => {

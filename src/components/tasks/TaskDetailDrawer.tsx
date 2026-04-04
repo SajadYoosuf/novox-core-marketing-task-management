@@ -1,12 +1,15 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   X,
   Calendar,
   CheckCircle2,
-  CheckSquare
+  CheckSquare,
+  Edit2,
+  AlertTriangle
 } from 'lucide-react'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
+import { Input, TextArea } from '@/components/ui/Input'
 import type { TaskWithRelations, Subtask, Profile } from '@/types/db'
 import { format, parseISO } from 'date-fns'
 
@@ -19,75 +22,144 @@ interface TaskDetailDrawerProps {
 export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawerProps) {
   const [task, setTask] = useState<TaskWithRelations | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [profiles, setProfiles] = useState<Profile[]>([])
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<Partial<TaskWithRelations>>({})
+  const abortRef = useRef<boolean>(false)
 
-  const loadTask = useCallback(async () => {
-    if (!supabaseConfigured || !taskId) return
+  const loadTask = useCallback(async (tid: string) => {
+    if (!supabaseConfigured) return
     setLoading(true)
-    const { data } = await supabase
-      .from('tasks')
-      .select('*, clients(*), task_assignees(*, profiles(*)), task_platforms(*, client_platforms(platform)), subtasks(*, client_platforms(platform), profiles:assigned_user_id(*))')
-      .eq('id', taskId)
-      .maybeSingle()
+    setError(null)
+    
+    try {
+      console.log(`📡 Syncing Detail Unit: ${tid}...`)
+      // Perform a more robust, sequential join if needed, but attempt a simplified single-fetch first
+      const { data, error: tErr } = await supabase
+        .from('tasks')
+        .select('*, clients(*), task_assignees(*, profiles(*)), task_platforms(*, client_platforms(platform)), subtasks(*, client_platforms(platform))')
+        .eq('id', tid)
+        .maybeSingle()
 
-    setTask(data as TaskWithRelations)
+      if (tErr) throw tErr
+      if (!data) throw new Error('Marketing strategic unit not found in core.')
 
-    const { data: p } = await supabase.from('profiles').select('*').order('full_name')
-    setProfiles((p as Profile[]) ?? [])
-    setLoading(false)
-  }, [taskId])
+      setTask(data as TaskWithRelations)
+      setDraft(data as TaskWithRelations)
+
+      const { data: p } = await supabase.from('profiles').select('*').order('full_name')
+      setProfiles((p as Profile[]) ?? [])
+    } catch (err: any) {
+      console.error('❌ Strategic Retrieval Failed:', err)
+      setError(err.message || 'Operation synchronization failure.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    if (taskId) void loadTask()
+    if (taskId) {
+       void loadTask(taskId)
+    } else {
+       setTask(null)
+       setError(null)
+       setEditing(false)
+    }
   }, [taskId, loadTask])
 
   const toggleSubtask = async (st: Subtask) => {
     if (!supabaseConfigured) return
     await supabase.from('subtasks').update({ is_done: !st.is_done }).eq('id', st.id)
-    void loadTask()
+    if (taskId) void loadTask(taskId)
+    onUpdate()
+  }
+
+  const save = async () => {
+    if (!supabaseConfigured || !taskId || !draft) return
+    await supabase.from('tasks').update({
+      title: draft.title,
+      description: draft.description,
+      priority: draft.priority,
+      status: draft.status,
+      deadline: draft.deadline,
+    }).eq('id', taskId)
+    setEditing(false)
+    if (taskId) void loadTask(taskId)
     onUpdate()
   }
 
   const totalSubtasks = task?.subtasks?.length || 0
   const completedSubtasks = task?.subtasks?.filter(s => s.is_done).length || 0
 
-  if (!taskId) return null
-
   return (
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 z-[100] bg-[#02040A]/60 backdrop-blur-sm transition-all duration-500 ${task ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+        className={`fixed inset-0 z-[100] bg-[#02040A]/60 backdrop-blur-sm transition-all duration-500 ${taskId ? 'opacity-100 pointer-events-auto' : 'pointer-events-none opacity-0'}`}
         onClick={onClose}
       />
 
-      {/* Drawer */}
+      {/* Drawer Container */}
       <div
-        className={`fixed right-0 top-0 z-[110] h-full w-full max-w-[520px] border-l border-white/5 bg-[#0B0D13] shadow-2xl transition-transform duration-500 ease-out ${task ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed right-0 top-0 z-[110] h-full w-full max-w-[580px] border-l border-white/5 bg-[#0B0D13] shadow-2xl transition-transform duration-500 ease-out ${taskId ? 'translate-x-0' : 'translate-x-full'}`}
       >
-        {loading ? (
-          <div className="flex h-full items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+        {loading && !task ? (
+          <div className="flex h-full flex-col items-center justify-center space-y-4">
+            <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[var(--color-accent)] border-t-transparent shadow-xl" />
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">Compiling Brief...</p>
+          </div>
+        ) : error ? (
+          <div className="flex h-full flex-col items-center justify-center p-12 text-center space-y-6">
+             <div className="h-20 w-20 rounded-[2rem] bg-rose-500/10 flex items-center justify-center">
+                <AlertTriangle className="h-10 w-10 text-rose-500" />
+             </div>
+             <div>
+                <h3 className="text-xl font-black text-white tracking-tight">Sync Disrupted</h3>
+                <p className="mt-2 text-sm text-[var(--color-text-muted)] font-medium leading-relaxed opacity-60">
+                   {error}
+                </p>
+             </div>
+             <Button onClick={onClose} className="h-12 px-8 rounded-xl bg-white/5 border border-white/5 text-[10px] font-black uppercase tracking-widest text-[#4F5B76] hover:text-white">
+                Back to Canvas
+             </Button>
           </div>
         ) : task ? (
           <div className="flex h-full flex-col">
-            {/* Header */}
+            {/* Header Infrastructure */}
             <div className="relative p-8 pb-12 border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
-              <button 
-                onClick={onClose}
-                className="absolute right-8 top-8 h-10 w-10 flex items-center justify-center rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="absolute right-8 top-8 flex items-center gap-3">
+                <button 
+                  onClick={() => setEditing(!editing)}
+                  className={`h-10 w-10 flex items-center justify-center rounded-xl bg-white/5 border border-white/5 transition-all cursor-pointer ${editing ? 'text-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/20' : 'text-[#4F5B76] hover:text-white'}`}
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+                <button 
+                  onClick={onClose}
+                  className="h-10 w-10 flex items-center justify-center rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
               <div className="space-y-4">
                 <div className="inline-flex items-center gap-2">
                   <span className="rounded-lg bg-[var(--color-accent)]/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[var(--color-accent)] border border-[var(--color-accent)]/10">
-                    {task.content_type?.replace('_', ' ') || 'PRODUCTION UNIT'}
+                    {task.content_type?.replace('_', ' ') || 'TACTICAL UNIT'}
                   </span>
                   <div className={`h-2 w-2 rounded-full ${task.priority === 'high' ? 'bg-rose-500 shadow-[0_0_8px_rose-500]' : 'bg-blue-500'}`} />
                 </div>
-                <h2 className="text-3xl font-black text-white tracking-tight leading-tight">{task.title}</h2>
+                
+                {editing ? (
+                  <Input 
+                    value={draft.title || ''} 
+                    onChange={e => setDraft({...draft, title: e.target.value})} 
+                    className="bg-black/40 border-white/10 text-2xl font-black focus:border-indigo-500 mt-2"
+                  />
+                ) : (
+                  <h2 className="mt-2 text-3xl font-black text-white tracking-tight leading-tight">{task.title}</h2>
+                )}
               </div>
             </div>
 
@@ -95,35 +167,52 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
               {/* Meta Grid */}
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">Projected Goal</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">Strategic Milestone</span>
                   <div className="flex items-center gap-3">
                     <Calendar className="h-4 w-4 text-[#EE4667]" />
-                    <span className="text-sm font-bold text-white/90">
-                      {task.deadline ? format(parseISO(task.deadline), 'MMM d, yyyy') : 'Indefinite Pipeline'}
-                    </span>
+                    {editing ? (
+                      <Input 
+                        type="datetime-local" 
+                        value={draft.deadline?.slice(0, 16) || ''} 
+                        onChange={e => setDraft({...draft, deadline: e.target.value})} 
+                        className="bg-black/40 h-8 border-white/5 text-xs text-white/70"
+                      />
+                    ) : (
+                      <span className="text-sm font-bold text-white/90">
+                        {task.deadline ? format(parseISO(task.deadline), 'MMM d, yyyy') : 'Indefinite Execution'}
+                      </span>
+                    )}
                   </div>
                 </div>
 
                 <div className="space-y-2 text-right">
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">Lead Brand</span>
-                  <p className="text-sm font-bold text-white/90 truncate">{task.clients?.name || 'Internal Strategy'}</p>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">Direct Brand</span>
+                  <p className="text-sm font-bold text-white/90 truncate">{task.clients?.name || 'Internal Pipeline'}</p>
                 </div>
               </div>
 
-              {/* Description */}
+              {/* Strategic Brief */}
               <div className="space-y-3 p-6 rounded-3xl bg-white/[0.02] border border-white/5">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">Strategic Brief</span>
-                <p className="text-sm font-medium leading-relaxed text-white/70">
-                  {task.description || 'No specific metadata provided for this tactical unit.'}
-                </p>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">Marketing Brief</span>
+                {editing ? (
+                   <TextArea 
+                     value={draft.description || ''} 
+                     onChange={e => setDraft({...draft, description: e.target.value})} 
+                     className="bg-black/40 border-white/10 text-sm h-32 focus:border-indigo-500"
+                   />
+                ) : (
+                  <p className="text-sm font-medium leading-relaxed text-white/70">
+                    {task.description || 'No specific metadata provided for this tactical unit.'}
+                  </p>
+                )}
               </div>
 
-              {/* Checklist Infrastructure */}
+              {/* Checklist Framework */}
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <CheckSquare className="h-4 w-4 text-[var(--color-accent)]" />
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em]">Production Checklist</h3>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em]">Execution Checklist</h3>
                   </div>
                   <span className="rounded-lg bg-white/5 px-2.5 py-1 text-[10px] font-black text-[#4F5B76]">
                     {completedSubtasks}/{totalSubtasks}
@@ -157,21 +246,27 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
                       )}
                     </div>
                   ))}
-                  {(!task.subtasks || task.subtasks.length === 0) && (
-                    <p className="text-xs text-[var(--color-text-muted)] italic">No production units defined.</p>
-                  )}
                 </div>
               </div>
             </div>
 
-            {/* Footer Action */}
+            {/* Tactical Action */}
             <div className="p-8 border-t border-white/5 bg-[#0B0D13]">
-              <Button
-                onClick={onClose}
-                className="h-16 w-full rounded-2xl bg-[#3A49F9] text-[11px] font-black uppercase tracking-[0.25em] text-white shadow-2xl shadow-[#3A49F9]/20 hover:scale-[1.01] active:scale-[0.99] transition-all"
-              >
-                Restore Canvas
-              </Button>
+              {editing ? (
+                 <Button
+                    onClick={save}
+                    className="h-16 w-full rounded-2xl bg-emerald-500 text-[11px] font-black uppercase tracking-[0.25em] text-white shadow-2xl shadow-emerald-500/20 hover:scale-[1.01] active:scale-[0.99] transition-all"
+                  >
+                    Authorize Pipeline Update
+                  </Button>
+              ) : (
+                <Button
+                  onClick={onClose}
+                  className="h-16 w-full rounded-2xl bg-[#3A49F9] text-[11px] font-black uppercase tracking-[0.25em] text-white shadow-2xl shadow-[#3A49F9]/20 hover:scale-[1.01] active:scale-[0.99] transition-all"
+                >
+                  Return to Canvas
+                </Button>
+              )}
             </div>
           </div>
         ) : null}

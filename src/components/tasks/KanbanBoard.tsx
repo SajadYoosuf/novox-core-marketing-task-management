@@ -39,8 +39,8 @@ function Column({
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-84 h-full shrink-0 flex-col gap-4 rounded-[2rem] border border-white/5 bg-white/[0.02] p-5 transition-all duration-300 ${
-        isOver ? 'bg-white/[0.05] ring-2 ring-[var(--color-accent)]/20' : ''
+      className={`flex w-full flex-col gap-5 rounded-[2.5rem] border border-white/5 bg-white/[0.02] p-6 transition-all duration-300 ${
+        isOver ? 'bg-white/[0.05] ring-2 ring-[var(--color-accent)]/20 shadow-2xl shadow-[var(--color-accent)]/5' : ''
       }`}
     >
       <div className="flex items-center justify-between px-2 mb-2 shrink-0">
@@ -110,7 +110,7 @@ export function KanbanBoard({
 
   return (
     <DndContext sensors={sensors} onDragEnd={(ev) => void handleDragEnd(ev)}>
-      <div className="flex h-full gap-6 overflow-x-auto pb-6 scrollbar-hide">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12 pb-12 animate-in fade-in duration-1000">
         {KANBAN_COLUMNS.map((status) => (
           <Column 
             key={status} 
