@@ -28,7 +28,7 @@ function Column({
   const statusColor = 
     status === 'pending' ? 'bg-slate-500' :
     status === 'assigned' ? 'bg-blue-500' :
-    status === 'in_progress' ? 'bg-indigo-500' :
+    status === 'in_progress' ? 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]' :
     status === 'review' ? 'bg-purple-500' :
     status === 'approved' ? 'bg-emerald-500' :
     status === 'scheduled' ? 'bg-cyan-500' :
@@ -39,35 +39,28 @@ function Column({
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-80 shrink-0 flex-col gap-4 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/30 p-4 transition-all duration-300 ${
-        tasks.length === 0 ? 'min-h-[150px]' : 'min-h-0'
-      } ${
-        isOver ? 'bg-[var(--color-surface-2)]/50 ring-2 ring-[var(--color-accent)]/20' : ''
+      className={`flex w-84 h-full shrink-0 flex-col gap-4 rounded-[2rem] border border-white/5 bg-white/[0.02] p-5 transition-all duration-300 ${
+        isOver ? 'bg-white/[0.05] ring-2 ring-[var(--color-accent)]/20' : ''
       }`}
     >
-      <div className="flex items-center justify-between px-1">
+      <div className="flex items-center justify-between px-2 mb-2 shrink-0">
         <div className="flex items-center gap-3">
-          <div className={`h-2 w-2 rounded-full ${statusColor} shadow-[0_0_8px_rgba(var(--color-accent-rgb),0.5)]`} />
-          <h3 className="text-sm font-bold tracking-tight text-[var(--color-text)]">
+          <div className={`h-2 w-2 rounded-full ${statusColor}`} />
+          <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-white/90">
             {STATUS_LABEL[status]}
           </h3>
-          <span className="flex h-5 items-center justify-center rounded-lg bg-white/5 px-2 text-[10px] font-black text-[var(--color-text-muted)] border border-white/5">
+          <span className="flex h-5 items-center justify-center rounded-lg bg-white/5 px-2 text-[9px] font-black text-[#4F5B76] border border-white/5">
             {tasks.length}
           </span>
         </div>
         <div className="flex items-center gap-1">
-          {status !== 'pending' && (
-            <button className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:bg-white/5 hover:text-[var(--color-text)] transition-all">
-              <Plus className="h-4 w-4" />
-            </button>
-          )}
-          <button className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:bg-white/5 hover:text-[var(--color-text)] transition-all">
+          <button className="flex h-7 w-7 items-center justify-center rounded-lg text-[#4F5B76] hover:bg-white/5 hover:text-white transition-all cursor-pointer">
             <MoreHorizontal className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-4">
+      <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide flex flex-col gap-4 pr-1">
         {tasks.map((t) => (
           <TaskCard 
             key={t.id} 
@@ -76,6 +69,11 @@ function Column({
             onTalentClick={onTalentClick}
           />
         ))}
+        {tasks.length === 0 && (
+          <div className="flex-1 border border-dashed border-white/5 rounded-[2rem] opacity-20 flex items-center justify-center">
+             <Plus className="h-6 w-6 text-[#4F5B76]" />
+          </div>
+        )}
       </div>
     </div>
   )
@@ -112,7 +110,7 @@ export function KanbanBoard({
 
   return (
     <DndContext sensors={sensors} onDragEnd={(ev) => void handleDragEnd(ev)}>
-      <div className="flex gap-6 overflow-x-auto pb-8 scrollbar-hide">
+      <div className="flex h-full gap-6 overflow-x-auto pb-6 scrollbar-hide">
         {KANBAN_COLUMNS.map((status) => (
           <Column 
             key={status} 

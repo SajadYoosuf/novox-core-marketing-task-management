@@ -130,12 +130,12 @@ export function TasksKanban() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-8 animate-in fade-in duration-700">
+    <div className="mx-auto w-full max-w-[1400px] flex flex-col h-[calc(100vh-64px)] overflow-hidden space-y-6 lg:space-y-8 animate-in fade-in duration-700">
       {/* Header Section */}
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between shrink-0 pt-4 lg:pt-8">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text)] lg:text-5xl">Task Workflow</h1>
-          <p className="mt-3 text-lg font-medium text-[var(--color-text-muted)] opacity-80 leading-relaxed">
+          <h1 className="text-4xl font-black tracking-tight text-[var(--color-text)] lg:text-5xl">Task Workflow</h1>
+          <p className="mt-3 text-lg font-medium text-[var(--color-text-muted)] opacity-60 leading-relaxed">
             Managing {tasks.filter(t => t.status !== 'completed').length} active marketing tasks
           </p>
         </div>
@@ -143,21 +143,21 @@ export function TasksKanban() {
         <div className="flex flex-wrap items-center gap-3">
           <Button
             onClick={() => setOpen(true)}
-            className="h-11 rounded-xl bg-[var(--color-accent)] px-6 font-bold text-white shadow-xl shadow-[var(--color-accent)]/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+            className="h-14 rounded-2xl bg-[var(--color-accent)] px-8 font-black uppercase tracking-widest text-white shadow-2xl shadow-[var(--color-accent)]/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-5 w-5" />
             New Task
           </Button>
         </div>
       </div>
 
       {/* Filter Bar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-b border-white/5 py-8">
-        <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-white/5 pt-6 shrink-0">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="relative group">
-            <Filter className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)]" />
+            <Filter className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)] transition-colors" />
             <select
-              className="h-11 w-44 appearance-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/50 pl-11 pr-10 text-[11px] font-black uppercase tracking-wider text-[var(--color-text)] ring-[var(--color-accent)]/20 transition-all focus:bg-[var(--color-surface)] focus:ring-4 focus:outline-none cursor-pointer"
+              className="h-11 w-44 appearance-none rounded-2xl border border-white/5 bg-white/[0.03] pl-11 pr-10 text-[10px] font-black uppercase tracking-widest text-[var(--color-text)] ring-[var(--color-accent)]/20 transition-all focus:bg-[#0B0D13] focus:ring-4 focus:outline-none cursor-pointer"
               value={filterClient}
               onChange={(e) => setFilterClient(e.target.value)}
             >
@@ -166,13 +166,13 @@ export function TasksKanban() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)]" />
+            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)] op-40" />
           </div>
 
           <div className="relative group">
-            <LayoutGrid className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)]" />
+            <LayoutGrid className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)] transition-colors" />
             <select
-              className="h-11 w-44 appearance-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/50 pl-11 pr-10 text-[11px] font-black uppercase tracking-wider text-[var(--color-text)] ring-[var(--color-accent)]/20 transition-all focus:bg-[var(--color-surface)] focus:ring-4 focus:outline-none cursor-pointer"
+              className="h-11 w-44 appearance-none rounded-2xl border border-white/5 bg-white/[0.03] pl-11 pr-10 text-[10px] font-black uppercase tracking-widest text-[var(--color-text)] ring-[var(--color-accent)]/20 transition-all focus:bg-[#0B0D13] focus:ring-4 focus:outline-none cursor-pointer"
               value={filterPlatform}
               onChange={(e) => setFilterPlatform(e.target.value)}
             >
@@ -181,13 +181,13 @@ export function TasksKanban() {
                 <option key={id} value={id}>{name}</option>
               ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)]" />
+            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)] op-40" />
           </div>
 
           <div className="relative group">
-            <Users className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)]" />
+            <Users className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)] transition-colors" />
             <select
-              className="h-11 w-44 appearance-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/50 pl-11 pr-10 text-[11px] font-black uppercase tracking-wider text-[var(--color-text)] ring-[var(--color-accent)]/20 transition-all focus:bg-[var(--color-surface)] focus:ring-4 focus:outline-none cursor-pointer"
+              className="h-11 w-44 appearance-none rounded-2xl border border-white/5 bg-white/[0.03] pl-11 pr-10 text-[10px] font-black uppercase tracking-widest text-[var(--color-text)] ring-[var(--color-accent)]/20 transition-all focus:bg-[#0B0D13] focus:ring-4 focus:outline-none cursor-pointer"
               value={filterAssignee}
               onChange={(e) => setFilterAssignee(e.target.value)}
             >
@@ -196,13 +196,13 @@ export function TasksKanban() {
                 <option key={p.id} value={p.id}>{p.full_name}</option>
               ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)]" />
+            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)] op-40" />
           </div>
 
           {(filterClient || filterPlatform || filterAssignee || searchQuery) && (
             <button 
               onClick={() => { setFilterClient(''); setFilterPlatform(''); setFilterAssignee(''); setSearchQuery(''); }}
-              className="text-[10px] font-black uppercase tracking-widest text-[#EE4667] hover:underline underline-offset-4 cursor-pointer"
+              className="text-[9px] font-black uppercase tracking-[0.2em] text-[#EE4667] hover:underline underline-offset-4 cursor-pointer"
             >
               Reset Filters
             </button>
@@ -210,11 +210,11 @@ export function TasksKanban() {
         </div>
 
         <div className="relative group min-w-[340px]">
-          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)]" />
+          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)] transition-colors" />
           <input
             type="text"
-            placeholder="Search tasks, brands, or production units..."
-            className="h-11 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/50 pl-11 pr-4 text-[11px] font-black uppercase tracking-widest text-[var(--color-text)] ring-[var(--color-accent)]/20 transition-all focus:bg-[var(--color-surface)] focus:ring-4 focus:outline-none placeholder:text-[#4F5B76]"
+            placeholder="Search production pipeline..."
+            className="h-11 w-full rounded-2xl border border-white/5 bg-white/[0.03] pl-11 pr-4 text-[10px] font-black uppercase tracking-widest text-[var(--color-text)] ring-[var(--color-accent)]/20 transition-all focus:bg-[#0B0D13] focus:ring-4 focus:outline-none placeholder:text-[#4F5B76]/40"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -222,28 +222,28 @@ export function TasksKanban() {
       </div>
 
       {loading ? (
-        <div className="flex h-[400px] w-full items-center justify-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[var(--color-accent)] border-t-transparent shadow-2xl" />
         </div>
       ) : tasks.length === 0 ? (
-        <div className="flex h-[400px] flex-col items-center justify-center rounded-[2.5rem] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)]/20 p-8 text-center">
-          <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-[var(--color-surface-2)] ring-1 ring-[var(--color-border)]">
-             <Plus className="h-10 w-10 text-[var(--color-accent)]/40" />
+        <div className="flex flex-1 flex-col items-center justify-center rounded-[3.5rem] border border-dashed border-white/5 bg-white/[0.01] p-12 text-center my-8">
+          <div className="mb-8 flex h-24 w-24 items-center justify-center rounded-[2.5rem] bg-white/[0.02] ring-1 ring-white/5 shadow-2xl">
+             <Plus className="h-12 w-12 text-[var(--color-accent)]/40" />
           </div>
-          <h2 className="text-xl font-bold text-[var(--color-text)]">Establish Your Marketing Pipeline</h2>
-          <p className="mt-2 max-w-[400px] text-sm text-[var(--color-text-muted)] font-medium leading-relaxed">
-            Your production board is waiting for its first tactical item. Coordinate your talent 
+          <h2 className="text-3xl font-black text-white tracking-tight">Establish Your Marketplace Pipeline</h2>
+          <p className="mt-4 max-w-[460px] text-base text-[var(--color-text-muted)] font-medium leading-relaxed opacity-60">
+            Your production board is waiting for its first tactical unit. Coordinate your talent 
             and define your brand goals across the Marketing Canvas.
           </p>
           <Button 
             onClick={() => setOpen(true)}
-            className="mt-8 h-11 rounded-xl bg-[var(--color-accent)] px-8 font-bold text-white shadow-none"
+            className="mt-10 h-16 rounded-2xl bg-[#3A49F9] px-12 font-black uppercase tracking-[0.25em] text-white shadow-2xl shadow-[#3A49F9]/20"
           >
             Create New Task
           </Button>
         </div>
       ) : view === 'kanban' ? (
-        <div className="h-[calc(100vh-320px)] min-h-[500px]">
+        <div className="flex-1 min-h-0 py-4">
           <KanbanBoard
             tasks={filtered}
             onStatusChange={onStatusChange}
@@ -252,18 +252,20 @@ export function TasksKanban() {
           />
         </div>
       ) : (
-        <div className="flex flex-1 flex-col gap-4 overflow-y-auto scrollbar-hide pr-1">
-          {filtered.map((t) => (
-            <TaskCard
-              key={t.id}
-              task={t}
-              onClick={() => setSelectedTaskId(t.id)}
-              onTalentClick={(uid) => setSelectedTalentId(uid)}
-            />
-          ))}
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide py-4 pr-1">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filtered.map((t) => (
+              <TaskCard
+                key={t.id}
+                task={t}
+                onClick={() => setSelectedTaskId(t.id)}
+                onTalentClick={(uid) => setSelectedTalentId(uid)}
+              />
+            ))}
+          </div>
           {filtered.length === 0 && (
-            <div className="col-span-full py-20 text-center rounded-[2.5rem] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)]/20">
-              <p className="text-sm font-bold text-[var(--color-text-muted)] italic">No active tasks found matching your filters.</p>
+            <div className="py-20 text-center rounded-[3rem] border border-dashed border-white/5 bg-white/[0.01]">
+              <p className="text-sm font-black uppercase tracking-[0.2em] text-[#4F5B76] italic opacity-40">Operational Void: No tasks match these filters.</p>
             </div>
           )}
         </div>

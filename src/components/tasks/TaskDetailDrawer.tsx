@@ -3,12 +3,10 @@ import {
   X,
   Calendar,
   CheckCircle2,
-  Circle,
   CheckSquare
 } from 'lucide-react'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
-import { StatusBadge } from '@/components/ui/Badge'
 import type { TaskWithRelations, Subtask, Profile } from '@/types/db'
 import { format, parseISO } from 'date-fns'
 
@@ -28,7 +26,7 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
     setLoading(true)
     const { data } = await supabase
       .from('tasks')
-      .select('*, clients(*), task_assignees(*), task_platforms(*, client_platforms(platform)), subtasks(*)')
+      .select('*, clients(*), task_assignees(*, profiles(*)), task_platforms(*, client_platforms(platform)), subtasks(*, client_platforms(platform), profiles:assigned_user_id(*))')
       .eq('id', taskId)
       .maybeSingle()
 
@@ -49,6 +47,9 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
     void loadTask()
     onUpdate()
   }
+
+  const totalSubtasks = task?.subtasks?.length || 0
+  const completedSubtasks = task?.subtasks?.filter(s => s.is_done).length || 0
 
   if (!taskId) return null
 
@@ -156,6 +157,9 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
                       )}
                     </div>
                   ))}
+                  {(!task.subtasks || task.subtasks.length === 0) && (
+                    <p className="text-xs text-[var(--color-text-muted)] italic">No production units defined.</p>
+                  )}
                 </div>
               </div>
             </div>
