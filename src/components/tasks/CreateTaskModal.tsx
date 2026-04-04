@@ -115,42 +115,77 @@ export function CreateTaskModal({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!supabaseConfigured || !userId || !clientId || !title.trim()) return
-
-    const { data: task, error } = await supabase
-      .from('tasks')
-      .insert({
-        client_id: clientId,
-        title: title.trim(),
-        description: description.trim() || null,
-        priority,
-        content_type: contentType,
-        deadline: deadline ? new Date(deadline).toISOString() : null,
-        status: subtaskDrafts.length > 0 ? 'assigned' : 'pending',
-        created_by: userId,
-      })
-      .select('id')
-      .single()
-
-    if (error || !task) return
-
-    const taskId = task.id as string
-
-    // Precision execution units (modernized subtasks)
-    for (const d of subtaskDrafts) {
-      await supabase.from('subtasks').insert({
-        task_id: taskId,
-        title: d.title,
-        client_platform_id: d.platformId || null,
-        assigned_user_id: d.assigneeId || null,
-        is_done: false,
-      })
+    if (!supabaseConfigured) {
+      alert('Strategic Hub: Supabase connectivity required.')
+      return
+    }
+    if (!userId) {
+      alert('Operational Error: No authenticated identity detects. Please re-synchronize (Login).')
+      return
+    }
+    if (!clientId) {
+      alert('Tactical Error: Brand selection is required for task establishment.')
+      return
+    }
+    if (!title.trim()) {
+      alert('Strategic Hub: Operational items require a title.')
+      return
     }
 
-    onCreated()
-    onClose()
-    setTitle(''); setDescription(''); setClientId(''); setDeadline('');
-    setSubtaskDrafts([]); setNewSubtaskTitle('');
+    try {
+      console.log('📡 Establishing new task unit...')
+      const { data: task, error: tErr } = await supabase
+        .from('tasks')
+        .insert({
+          client_id: clientId,
+          title: title.trim(),
+          description: description.trim() || null,
+          priority,
+          content_type: contentType,
+          deadline: deadline ? new Date(deadline).toISOString() : null,
+          status: subtaskDrafts.length > 0 ? 'assigned' : 'pending',
+          created_by: userId,
+        })
+        .select('id')
+        .single()
+
+      if (tErr) {
+        console.error('❌ Task Creation Failed:', tErr)
+        alert(`Strategic Expansion Failed: ${tErr.message}`)
+        return
+      }
+
+      if (!task) {
+        alert('Operational Void: Task ID initialization failed.')
+        return
+      }
+
+      const taskId = task.id as string
+      console.log(`✅ Success: Task ${taskId} established. Syncing subtasks...`)
+
+      // Precision execution units (modernized subtasks)
+      if (subtaskDrafts.length > 0) {
+        const { error: sErr } = await supabase.from('subtasks').insert(
+          subtaskDrafts.map(d => ({
+            task_id: taskId,
+            title: d.title,
+            client_platform_id: d.platformId || null,
+            assigned_user_id: d.assigneeId || null,
+            is_done: false,
+          }))
+        )
+        if (sErr) console.error('⚠️ Subtask Sync Warning:', sErr)
+      }
+
+      console.log('🏁 Pipeline finalized. Synchronizing UI...')
+      onCreated()
+      onClose()
+      setTitle(''); setDescription(''); setClientId(''); setDeadline('');
+      setSubtaskDrafts([]); setNewSubtaskTitle('');
+    } catch (err) {
+      console.error('⚠️ Unexpected Execution Error:', err)
+      alert('Critical Hub Failure: Please inspect the tactical console.')
+    }
   }
 
   return (

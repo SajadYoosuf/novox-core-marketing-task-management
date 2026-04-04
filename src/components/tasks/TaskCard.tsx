@@ -23,13 +23,20 @@ const PlatformIcon = ({ platform }: { platform?: string }) => {
 interface TaskCardProps {
   task: TaskWithRelations
   onClick: () => void
+  onTalentClick?: (userId: string) => void
 }
 
-export function TaskCard({ task, onClick }: TaskCardProps) {
+export function TaskCard({ task, onClick, onTalentClick }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
     data: { task },
   })
+
+  // Synchronize unique assignees from both task-level and subtasks
+  const uniqueAssigneeIds = Array.from(new Set([
+    ...(task.task_assignees?.map(a => a.user_id) || []),
+    ...(task.subtasks?.filter(s => s.assigned_user_id).map(s => s.assigned_user_id!) || [])
+  ]))
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -43,7 +50,8 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
   const progressPercent = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0
 
   // Get primary platform
-  const primaryPlatform = task.task_platforms?.[0]?.client_platforms?.platform
+  const primaryPlatform = task.task_platforms?.[0]?.client_platforms?.platform || 
+                          task.subtasks?.find(s => s.client_platforms?.platform)?.client_platforms?.platform
 
   return (
     <div 
@@ -52,45 +60,46 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
       {...listeners} 
       {...attributes}
       onClick={(e) => {
-        // Prevent click from triggering if dragging start was intended 
-        // though dnd-kit handles this, explicit onClick is safer for drawer
         e.stopPropagation()
         onClick()
       }}
       className="group relative cursor-pointer"
     >
       <div
-        className="block overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm transition-all duration-300 hover:border-[var(--color-accent)]/30 hover:shadow-xl hover:shadow-[var(--color-accent)]/5 active:scale-[0.98]"
+        className="block overflow-hidden rounded-[2rem] border border-[var(--color-border)] bg-[#0B0D13]/80 backdrop-blur-xl p-5 shadow-2xl shadow-black/20 transition-all duration-500 hover:border-[var(--color-accent)]/40 hover:shadow-indigo-500/5 active:scale-[0.98]"
       >
         {/* Content Type Ribbon */}
-        {task.content_type && (
-          <div className="mb-3 flex items-center justify-between">
-            <span className="rounded-md bg-[var(--color-accent)]/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[var(--color-accent)]">
-              {task.content_type.replace('_', ' ')}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="rounded-lg bg-[var(--color-accent)]/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.1em] text-[var(--color-accent)] border border-[var(--color-accent)]/10">
+              {task.content_type?.replace('_', ' ') || 'CREATIVE'}
             </span>
-            <GripVertical className="h-3.5 w-3.5 cursor-grab text-[var(--color-text-muted)] opacity-0 transition-opacity group-hover:opacity-100" />
+            {task.priority === 'high' && (
+              <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse shadow-[0_0_8px_rose-500]" />
+            )}
           </div>
-        )}
+          <GripVertical className="h-4 w-4 cursor-grab text-[#4F5B76] opacity-40 transition-opacity hover:opacity-100" />
+        </div>
 
-        <div className="space-y-1">
-          <h4 className="text-sm font-bold leading-snug text-[var(--color-text)] transition-colors group-hover:text-[var(--color-accent)]">
+        <div className="space-y-1.5">
+          <h4 className="text-[15px] font-black leading-tight text-white tracking-tight group-hover:text-indigo-400 transition-colors">
             {task.title}
           </h4>
-          <p className="text-[11px] font-medium text-[var(--color-text-muted)]">
-            Client: <span className="text-[var(--color-text)] opacity-80">{task.clients?.name || 'Internal'}</span>
+          <p className="text-[10px] font-black uppercase tracking-widest text-[#4F5B76]">
+            {task.clients?.name || 'SYNCING...'}
           </p>
         </div>
 
         {/* Subtask Progress */}
         {totalSubtasks > 0 && (
-          <div className="mt-4 space-y-1.5">
-            <div className="flex justify-between text-[9px] font-bold uppercase tracking-tight text-[var(--color-text-muted)]">
-              <span>Subtasks</span>
-              <span>{completedSubtasks}/{totalSubtasks}</span>
+          <div className="mt-6 space-y-2">
+            <div className="flex justify-between text-[9px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">
+              <span>Execution</span>
+              <span>{Math.round(progressPercent)}%</span>
             </div>
-            <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--color-border)]">
+            <div className="h-1 w-full overflow-hidden rounded-full bg-white/5">
               <div 
-                className="h-full bg-gradient-to-r from-[var(--color-accent)] to-purple-500 transition-all duration-500" 
+                className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-700" 
                 style={{ width: `${progressPercent}%` }} 
               />
             </div>
@@ -99,28 +108,49 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
 
         {/* Platform Badge */}
         {primaryPlatform && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[var(--color-surface-2)]/50 border border-[var(--color-border)] px-2.5 py-1 transition-all group-hover:border-[var(--color-accent)]/20">
+          <div className="mt-5 inline-flex items-center gap-2 rounded-xl bg-white/[0.03] border border-white/5 px-3 py-1.5 transition-all group-hover:border-white/10 group-hover:bg-white/[0.05]">
             <PlatformIcon platform={primaryPlatform} />
-            <span className="text-[10px] font-bold capitalize text-[var(--color-text)]">
+            <span className="text-[9px] font-black uppercase tracking-widest text-white/50">
               {primaryPlatform}
             </span>
           </div>
         )}
 
         {/* Footer */}
-        <div className="mt-5 flex items-center justify-between border-t border-dashed border-[var(--color-border)] pt-4">
-          <div className="flex -space-x-2">
-            <div className="h-6 w-6 rounded-full border-2 border-[var(--color-surface)] bg-gradient-to-br from-indigo-500 to-purple-600 p-[2px]">
-              <div className="h-full w-full rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-white">
-                {task.title.charAt(0)}
+        <div className="mt-6 flex items-center justify-between border-t border-white/5 pt-5">
+          <div className="flex -space-x-1.5">
+            {uniqueAssigneeIds.length > 0 ? (
+               uniqueAssigneeIds.slice(0, 3).map(aid => {
+                  const profile = task.task_assignees?.find(a => a.user_id === aid)?.profiles || 
+                                 task.subtasks?.find(s => s.assigned_user_id === aid)?.profiles
+                  return (
+                    <div 
+                      key={aid}
+                      onClick={(e) => { e.stopPropagation(); onTalentClick?.(aid); }}
+                      className="h-7 w-7 rounded-full border-2 border-[#0B0D13] bg-gradient-to-br from-indigo-500 to-purple-600 p-[2px] cursor-pointer hover:scale-110 hover:z-30 transition-all shadow-xl"
+                    >
+                      <div className="h-full w-full rounded-full bg-slate-900 flex items-center justify-center text-[10px] font-black text-white/80">
+                        {profile?.full_name.charAt(0) || '?'}
+                      </div>
+                    </div>
+                  )
+               })
+            ) : (
+              <div className="h-7 w-7 rounded-full border-2 border-[#0B0D13] bg-white/5 flex items-center justify-center">
+                <GripVertical className="h-3 w-3 text-[#4F5B76]/40" />
               </div>
-            </div>
+            )}
+            {uniqueAssigneeIds.length > 3 && (
+              <div className="h-7 w-7 rounded-full border-2 border-[#0B0D13] bg-[#161B26] flex items-center justify-center text-[9px] font-black text-[#4F5B76]">
+                +{uniqueAssigneeIds.length - 3}
+              </div>
+            )}
           </div>
           
           {task.deadline && (
-             <div className="flex items-center gap-1.5 text-[10px] font-bold text-[var(--color-text-muted)]">
-               <Calendar className="h-3 w-3" />
-               {format(parseISO(task.deadline), 'MMM d')}
+             <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#4F5B76] opacity-60">
+               <Calendar className="h-3.5 w-3.5" />
+               <span className="mt-0.5">{format(parseISO(task.deadline), 'MMM d')}</span>
              </div>
           )}
         </div>

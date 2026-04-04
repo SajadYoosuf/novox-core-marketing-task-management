@@ -16,10 +16,12 @@ function Column({
   status,
   tasks,
   onTaskClick,
+  onTalentClick,
 }: {
   status: (typeof KANBAN_COLUMNS)[number]
   tasks: TaskWithRelations[]
   onTaskClick: (id: string) => void
+  onTalentClick?: (userId: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `col-${status}` })
   
@@ -67,7 +69,12 @@ function Column({
 
       <div className="flex flex-1 flex-col gap-4">
         {tasks.map((t) => (
-          <TaskCard key={t.id} task={t} onClick={() => onTaskClick(t.id)} />
+          <TaskCard 
+            key={t.id} 
+            task={t} 
+            onClick={() => onTaskClick(t.id)} 
+            onTalentClick={onTalentClick}
+          />
         ))}
       </div>
     </div>
@@ -78,10 +85,12 @@ export function KanbanBoard({
   tasks,
   onStatusChange,
   onTaskClick,
+  onTalentClick,
 }: {
   tasks: TaskWithRelations[]
   onStatusChange: (taskId: string, status: TaskWithRelations['status']) => Promise<void>
   onTaskClick: (id: string) => void
+  onTalentClick?: (userId: string) => void
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { 
@@ -110,6 +119,7 @@ export function KanbanBoard({
             status={status} 
             tasks={tasks.filter((t) => t.status === status)} 
             onTaskClick={onTaskClick}
+            onTalentClick={onTalentClick}
           />
         ))}
       </div>

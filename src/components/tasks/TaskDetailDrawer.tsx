@@ -56,13 +56,13 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
     <>
       {/* Backdrop */}
       <div
-        className={`fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${task ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+        className={`fixed inset-0 z-[100] bg-[#02040A]/60 backdrop-blur-sm transition-all duration-500 ${task ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
         onClick={onClose}
       />
 
       {/* Drawer */}
       <div
-        className={`fixed right-0 top-0 z-50 h-full w-full max-w-[450px] border-l border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl transition-transform duration-500 ease-out sm:max-w-[500px] ${task ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed right-0 top-0 z-[110] h-full w-full max-w-[520px] border-l border-white/5 bg-[#0B0D13] shadow-2xl transition-transform duration-500 ease-out ${task ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {loading ? (
           <div className="flex h-full items-center justify-center">
@@ -71,69 +71,62 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
         ) : task ? (
           <div className="flex h-full flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-[var(--color-border)] p-6">
-              <h2 className="text-xl font-bold text-[var(--color-text)]">Task Details</h2>
-              <button
+            <div className="relative p-8 pb-12 border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent">
+              <button 
                 onClick={onClose}
-                className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-white/5 hover:text-[var(--color-text)] transition-all"
+                className="absolute right-8 top-8 h-10 w-10 flex items-center justify-center rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
+
+              <div className="space-y-4">
+                <div className="inline-flex items-center gap-2">
+                  <span className="rounded-lg bg-[var(--color-accent)]/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[var(--color-accent)] border border-[var(--color-accent)]/10">
+                    {task.content_type?.replace('_', ' ') || 'PRODUCTION UNIT'}
+                  </span>
+                  <div className={`h-2 w-2 rounded-full ${task.priority === 'high' ? 'bg-rose-500 shadow-[0_0_8px_rose-500]' : 'bg-blue-500'}`} />
+                </div>
+                <h2 className="text-3xl font-black text-white tracking-tight leading-tight">{task.title}</h2>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto scrollbar-hide p-8 space-y-8">
-              {/* Status & Title */}
-              <div className="space-y-4">
-                <div className="inline-block">
-                  <StatusBadge status={task.status} />
-                </div>
-                <h1 className="text-3xl font-black leading-tight tracking-tight text-[var(--color-text)]">
-                  {task.title}
-                </h1>
-              </div>
-
+            <div className="flex-1 overflow-y-auto scrollbar-hide p-8 space-y-10">
               {/* Meta Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-2xl bg-[var(--color-surface-2)]/50 p-4 border border-[var(--color-border)]">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)] opacity-60">Assignee</span>
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[var(--color-accent)] to-purple-600 p-[2px]">
-                      <div className="h-full w-full rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-white">
-                        {profiles.find(p => p.id === task.task_assignees?.[0]?.user_id)?.full_name?.charAt(0) || 'U'}
-                      </div>
-                    </div>
-                    <span className="text-sm font-bold text-[var(--color-text)]">
-                      {profiles.find(p => p.id === task.task_assignees?.[0]?.user_id)?.full_name || 'Unassigned'}
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">Projected Goal</span>
+                  <div className="flex items-center gap-3">
+                    <Calendar className="h-4 w-4 text-[#EE4667]" />
+                    <span className="text-sm font-bold text-white/90">
+                      {task.deadline ? format(parseISO(task.deadline), 'MMM d, yyyy') : 'Indefinite Pipeline'}
                     </span>
                   </div>
                 </div>
 
-                <div className="rounded-2xl bg-[var(--color-surface-2)]/50 p-4 border border-[var(--color-border)]">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)] opacity-60">Deadline</span>
-                  <div className="mt-3 flex items-center gap-3">
-                    <Calendar className="h-5 w-5 text-rose-500" />
-                    <span className="text-sm font-bold text-[var(--color-text)]">
-                      {task.deadline ? format(parseISO(task.deadline), 'MMM d, yyyy') : 'No date'}
-                    </span>
-                  </div>
+                <div className="space-y-2 text-right">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">Lead Brand</span>
+                  <p className="text-sm font-bold text-white/90 truncate">{task.clients?.name || 'Internal Strategy'}</p>
                 </div>
               </div>
 
               {/* Description */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-bold uppercase tracking-widest text-[var(--color-text-muted)] opacity-60">Description</h3>
-                <p className="text-sm leading-relaxed text-[var(--color-text)] opacity-80">
-                  {task.description || 'No Task brief provided for this task.'}
+              <div className="space-y-3 p-6 rounded-3xl bg-white/[0.02] border border-white/5">
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">Strategic Brief</span>
+                <p className="text-sm font-medium leading-relaxed text-white/70">
+                  {task.description || 'No specific metadata provided for this tactical unit.'}
                 </p>
               </div>
 
-              {/* Checklist */}
-              <div className="rounded-3xl bg-black/20 p-6 space-y-6">
+              {/* Checklist Infrastructure */}
+              <div className="space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-[var(--color-text)]">
-                    Checklist ({task.subtasks?.filter(s => s.is_done).length}/{task.subtasks?.length})
-                  </h3>
-                  <CheckSquare className="h-4 w-4 text-[var(--color-text-muted)]" />
+                  <div className="flex items-center gap-3">
+                    <CheckSquare className="h-4 w-4 text-[var(--color-accent)]" />
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em]">Production Checklist</h3>
+                  </div>
+                  <span className="rounded-lg bg-white/5 px-2.5 py-1 text-[10px] font-black text-[#4F5B76]">
+                    {completedSubtasks}/{totalSubtasks}
+                  </span>
                 </div>
 
                 <div className="space-y-3">
@@ -141,32 +134,39 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
                     <div
                       key={st.id}
                       onClick={() => toggleSubtask(st)}
-                      className="flex cursor-pointer items-center gap-4 group"
+                      className="group flex cursor-pointer items-center justify-between rounded-2xl bg-white/[0.02] border border-white/5 p-4 hover:bg-white/[0.05] transition-all"
                     >
-                      {st.is_done ? (
-                        <CheckCircle2 className="h-5 w-5 text-[var(--color-accent)]" />
-                      ) : (
-                        <Circle className="h-5 w-5 text-[var(--color-text-muted)] group-hover:text-[var(--color-accent)]" />
+                      <div className="flex items-center gap-4">
+                        {st.is_done ? (
+                          <div className="h-5 w-5 rounded-lg bg-[var(--color-accent)]/80 flex items-center justify-center text-white scale-110 shadow-lg shadow-[var(--color-accent)]/20 transition-all">
+                            <CheckCircle2 className="h-3 w-3" />
+                          </div>
+                        ) : (
+                          <div className="h-5 w-5 rounded-lg border-2 border-white/10 group-hover:border-[var(--color-accent)]/40 transition-all" />
+                        )}
+                        <span className={`text-sm font-bold tracking-tight transition-all ${st.is_done ? 'text-[#4F5B76] line-through' : 'text-white/80'}`}>
+                          {st.title}
+                        </span>
+                      </div>
+                      
+                      {st.assigned_user_id && (
+                        <div className="h-6 w-6 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-[8px] font-black uppercase text-[#4F5B76]">
+                          {profiles.find(p => p.id === st.assigned_user_id)?.full_name.charAt(0) || '?'}
+                        </div>
                       )}
-                      <span className={`text-sm font-medium transition-all ${st.is_done ? 'text-[var(--color-text-muted)] line-through' : 'text-[var(--color-text)]'}`}>
-                        {st.title}
-                      </span>
                     </div>
                   ))}
-                  {(!task.subtasks || task.subtasks.length === 0) && (
-                    <p className="text-xs text-[var(--color-text-muted)] italic">No subtasks defined.</p>
-                  )}
                 </div>
               </div>
             </div>
 
             {/* Footer Action */}
-            <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)] p-8">
+            <div className="p-8 border-t border-white/5 bg-[#0B0D13]">
               <Button
                 onClick={onClose}
-                className="h-12 w-full rounded-2xl bg-[var(--color-accent)] text-sm font-black uppercase tracking-widest text-white shadow-2xl shadow-[var(--color-accent)]/20 hover:scale-[1.01] active:scale-[0.99] transition-all"
+                className="h-16 w-full rounded-2xl bg-[#3A49F9] text-[11px] font-black uppercase tracking-[0.25em] text-white shadow-2xl shadow-[#3A49F9]/20 hover:scale-[1.01] active:scale-[0.99] transition-all"
               >
-                Update Task
+                Restore Canvas
               </Button>
             </div>
           </div>

@@ -7,6 +7,7 @@ import { KanbanBoard } from '@/components/tasks/KanbanBoard'
 import { TaskCard } from '@/components/tasks/TaskCard'
 import { CreateTaskModal } from '@/components/tasks/CreateTaskModal'
 import { TaskDetailDrawer } from '@/components/tasks/TaskDetailDrawer'
+import { TalentTasksDrawer } from '@/components/tasks/TalentTasksDrawer'
 import type { Client, TaskWithRelations, Profile } from '@/types/db'
 import { PLATFORM_LABEL } from '@/lib/constants'
 import { logPerformance, insertNotification } from '@/lib/performance'
@@ -19,6 +20,7 @@ export function TasksKanban() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [open, setOpen] = useState(false)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  const [selectedTalentId, setSelectedTalentId] = useState<string | null>(null)
   const [filterClient, setFilterClient] = useState('')
   const [filterPlatform, setFilterPlatform] = useState('')
   const [filterAssignee, setFilterAssignee] = useState('')
@@ -31,16 +33,26 @@ export function TasksKanban() {
     setLoading(true)
 
     try {
-      // Fetch tasks with all relations for the rich Kanban view
+      console.log('📡 Fetching tasks from Marketing Core...')
+      // Simplified fetcher for absolute reliability
       const { data: t, error: tErr } = await supabase
         .from('tasks')
-        .select('*, clients(*), task_assignees(*), task_platforms(*, client_platforms(platform)), subtasks(*)')
+        .select(`
+          *,
+          clients(*),
+          task_assignees(*, profiles(*)),
+          task_platforms(*, client_platforms(platform)),
+          subtasks(*, client_platforms(platform), profiles:assigned_user_id(*))
+        `)
         .order('updated_at', { ascending: false })
 
       if (tErr) {
-        console.error('Task Fetch Error:', tErr)
-        setTasks([])
+        console.error('❌ Task Fetch Error:', tErr)
+        // Fallback to simple task fetch if complex join fails
+        const { data: simpleT } = await supabase.from('tasks').select('*, clients(*)').order('updated_at', { ascending: false })
+        setTasks((simpleT as TaskWithRelations[]) ?? [])
       } else {
+        console.log(`✅ Sync Complete: ${t?.length || 0} tasks retrieved.`)
         setTasks((t as TaskWithRelations[]) ?? [])
       }
 
@@ -50,7 +62,7 @@ export function TasksKanban() {
       const { data: p } = await supabase.from('profiles').select('*').order('full_name')
       setProfiles((p as Profile[]) ?? [])
     } catch (err) {
-      console.error('Unexpected Load Error:', err)
+      console.error('⚠️ Unexpected Operational Error:', err)
     } finally {
       setLoading(false)
     }
@@ -231,18 +243,22 @@ export function TasksKanban() {
           </Button>
         </div>
       ) : view === 'kanban' ? (
-        <KanbanBoard
-          tasks={filtered}
-          onStatusChange={onStatusChange}
-          onTaskClick={(id) => setSelectedTaskId(id)}
-        />
+        <div className="h-[calc(100vh-320px)] min-h-[500px]">
+          <KanbanBoard
+            tasks={filtered}
+            onStatusChange={onStatusChange}
+            onTaskClick={(id) => setSelectedTaskId(id)}
+            onTalentClick={(uid) => setSelectedTalentId(uid)}
+          />
+        </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto scrollbar-hide pr-1">
           {filtered.map((t) => (
             <TaskCard
               key={t.id}
               task={t}
               onClick={() => setSelectedTaskId(t.id)}
+              onTalentClick={(uid) => setSelectedTalentId(uid)}
             />
           ))}
           {filtered.length === 0 && (
@@ -259,6 +275,15 @@ export function TasksKanban() {
         taskId={selectedTaskId}
         onClose={() => setSelectedTaskId(null)}
         onUpdate={load}
+      />
+
+      <TalentTasksDrawer
+        userId={selectedTalentId}
+        onClose={() => setSelectedTalentId(null)}
+        onTaskClick={(tid) => {
+          setSelectedTalentId(null)
+          setSelectedTaskId(tid)
+        }}
       />
     </div>
   )

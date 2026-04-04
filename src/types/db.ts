@@ -93,7 +93,7 @@ export interface Subtask {
   client_platform_id: string | null
   assigned_user_id: string | null
   client_platforms?: ClientPlatform | null
-  assignee?: Profile | null
+  profiles?: Profile | null
 }
 
 export interface Submission {
