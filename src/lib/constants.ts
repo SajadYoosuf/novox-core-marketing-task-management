@@ -47,6 +47,23 @@ export const TASK_CONTENT_TYPE_LABELS: Record<TaskContentType, string> = {
   content_checking: 'Content Checking',
 }
 
+export const STATUS_LABEL: Record<TaskStatus, string> = {
+  pending: 'Pending',
+  assigned: 'Assigned',
+  in_progress: 'In Progress',
+  review: 'Review',
+  approved: 'Approved',
+  completed: 'Completed',
+  rejected: 'Rejected',
+}
+
+export const PRIORITY_LABEL: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  urgent: 'Urgent',
+}
+
 export const STATUS_ORDER: TaskStatus[] = [
   'pending',
   'assigned',
