@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { UserPlus, ShieldAlert } from 'lucide-react'
+import { useCallback, useEffect, useState, useMemo } from 'react'
+import { UserPlus, ShieldAlert, Search } from 'lucide-react'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { inviteEmployee } from '@/lib/inviteEmployee'
@@ -9,7 +9,6 @@ import {
   DESIGNER_HEAD_ASSIGNABLE_ROLES,
   ROLE_LABEL,
   canAssignRole,
-  canEditProfileRole,
 } from '@/lib/constants'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -17,17 +16,27 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import type { Profile, UserRole } from '@/types/db'
 
+interface MemberStats {
+  done: number
+  active: number
+  pending: number
+  performance: number
+}
+
 export function Team() {
   const profile = useAuthStore((s) => s.profile)
-  const userId = useAuthStore((s) => s.user?.id)
   const isElevated = useAuthStore((s) => s.isElevated())
 
   const [members, setMembers] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [open, setOpen] = useState(false)
-  const [savingId, setSavingId] = useState<string | null>(null)
 
+  // Search & Filter
+  const [search, setSearch] = useState('')
+  const [activeTab, setActiveTab] = useState<string>('all')
+
+  // Modal & Form
+  const [open, setOpen] = useState(false)
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -37,289 +46,341 @@ export function Team() {
   const [banner, setBanner] = useState<string | null>(null)
 
   const actorRole = profile?.role
-
   const rolesForNewEmployee = useMemo(() => {
-    if (actorRole === 'admin') return ALL_USER_ROLES
-    if (actorRole === 'marketing_head') return HEAD_ASSIGNABLE_ROLES
-    if (actorRole === 'designer_head') return DESIGNER_HEAD_ASSIGNABLE_ROLES
+    if (!actorRole) return []
+    // Exclude 'admin' from assignable roles in the team section
+    const assignable = ALL_USER_ROLES.filter(r => r !== 'admin') as UserRole[]
+    
+    if (actorRole === 'admin') return assignable
+    if (actorRole === 'marketing_head') return HEAD_ASSIGNABLE_ROLES as UserRole[]
+    if (actorRole === 'designer_head') return DESIGNER_HEAD_ASSIGNABLE_ROLES as UserRole[]
     return []
   }, [actorRole])
+
+  const [statsMap, setStatsMap] = useState<Map<string, MemberStats>>(new Map())
 
   const load = useCallback(async () => {
     if (!supabaseConfigured) {
       setLoading(false)
-      setLoadError('Supabase is not configured.')
+      setLoadError('Database connection not established.')
       return
     }
     setLoading(true)
     setLoadError(null)
-    const { data, error } = await supabase.from('profiles').select('*').order('full_name')
-    if (error) {
-      setLoadError(error.message)
-      setMembers([])
-    } else {
-      setMembers((data as Profile[]) ?? [])
+
+    try {
+      const [profRes, logRes, taskRes, assignRes, platformRes] = await Promise.all([
+        supabase.from('profiles').select('*').order('full_name'),
+        supabase.from('performance_logs').select('*'),
+        supabase.from('tasks').select('id, status'),
+        supabase.from('task_assignees').select('*'),
+        supabase.from('task_platforms').select('*')
+      ])
+
+      if (profRes.error) {
+        setLoadError(profRes.error.message)
+      } else {
+        setMembers((profRes.data as Profile[]) ?? [])
+        const safeLogs = logRes.data ?? []
+        const safeTasks = taskRes.data ?? []
+        const safeAssignees = assignRes.data ?? []
+        const safePlatforms = platformRes.data ?? []
+
+        const map = new Map<string, MemberStats>()
+        profRes.data?.forEach(m => {
+          const uLogs = safeLogs.filter(l => l.user_id === m.id)
+          const legacyDone = uLogs.filter(l => l.event === 'task_completed').length
+          const delayed = uLogs.filter(l => l.event === 'task_delayed').length
+          const reject = uLogs.filter(l => l.event === 'task_rejected').length
+
+          // Calculate counts based on current task statuses
+          const userTaskIds = new Set([
+            ...safeAssignees.filter(a => a.user_id === m.id).map(a => a.task_id),
+            ...safePlatforms.filter(tp => tp.assigned_user_id === m.id).map(tp => tp.task_id)
+          ])
+
+          const userTasks = safeTasks.filter(t => userTaskIds.has(t.id))
+          
+          const doneCount = userTasks.filter(t => t.status === 'completed' || t.status === 'approved').length
+          const activeCount = userTasks.filter(t => 
+            t.status === 'assigned' || t.status === 'in_progress' || t.status === 'review'
+          ).length
+          const pendingCount = userTasks.filter(t => t.status === 'pending').length
+
+          // Maintain performance score logic using legacy logs for historical accuracy
+          const total = legacyDone + delayed + reject
+          const base = total > 0 ? (legacyDone / total) * 100 : 0
+          const performance = total === 0 ? 0 : Math.min(100, Math.round(base + (legacyDone * 2)))
+
+          map.set(m.id, { 
+            done: doneCount, 
+            active: activeCount, 
+            pending: pendingCount, 
+            performance 
+          })
+        })
+        setStatsMap(map)
+      }
+    } catch (err) {
+      console.error('Team load error:', err)
+      setLoadError('A critical error occurred while loading team data.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  useEffect(() => {
-    if (rolesForNewEmployee.length && !rolesForNewEmployee.includes(newRole)) {
-      setNewRole(rolesForNewEmployee[0]!)
-    }
-  }, [rolesForNewEmployee, newRole])
+  const filteredMembers = useMemo(() => {
+    return members.filter(m => {
+      // Always exclude admins from the team directory view
+      if (m.role === 'admin') return false
+
+      const matchesSearch = m.full_name.toLowerCase().includes(search.toLowerCase()) ||
+        (m.email ?? '').toLowerCase().includes(search.toLowerCase())
+      const matchesTab = activeTab === 'all' ||
+        (activeTab === 'executive' && m.role === 'marketing_executive') ||
+        (activeTab === 'designer' && m.role === 'designer') ||
+        (activeTab === 'marketing_head' && m.role === 'marketing_head')
+      return matchesSearch && matchesTab
+    })
+  }, [members, search, activeTab])
 
   async function handleAddEmployee(e: React.FormEvent) {
     e.preventDefault()
     setFormError(null)
-    if (!canAssignRole(actorRole, newRole)) {
+    if (!actorRole || !canAssignRole(actorRole, newRole)) {
       setFormError('You cannot assign this role.')
-      return
-    }
-    if (password.length < 6) {
-      setFormError('Password must be at least 6 characters.')
       return
     }
     setSubmitting(true)
     try {
-      const { error } = await inviteEmployee({
-        email,
-        password,
-        fullName,
-        role: newRole,
-      })
-      if (error) {
-        setFormError(error)
-        return
-      }
-      setFullName('')
-      setEmail('')
-      setPassword('')
-      setNewRole(rolesForNewEmployee[0] ?? 'marketing_executive')
+      const { error } = await inviteEmployee({ email, password, fullName, role: newRole })
+      if (error) { setFormError(error); return }
+      setFullName(''); setEmail(''); setPassword('');
       await load()
       setOpen(false)
-      setBanner(
-        'Employee added successfully. They can now sign in with the email and password you provided.'
-      )
-    } finally {
-      setSubmitting(false)
-    }
+      setBanner('Employee onboarded successfully.')
+    } finally { setSubmitting(false) }
   }
 
-  async function updateMemberRole(member: Profile, nextRole: UserRole) {
-    if (!supabaseConfigured || !userId) return
-    if (member.id === userId && nextRole !== member.role) {
-      const ok = confirm('Change your own role? You may lose access to this screen.')
-      if (!ok) return
-    }
-    if (!canAssignRole(actorRole, nextRole)) return
-    if (!canEditProfileRole(actorRole, member.role)) return
-
-    setSavingId(member.id)
-    const { error } = await supabase.from('profiles').update({ role: nextRole }).eq('id', member.id)
-    setSavingId(null)
-    if (error) {
-      alert(error.message)
-      return
-    }
-    await load()
-    if (member.id === userId) await useAuthStore.getState().fetchProfile(userId)
-  }
-
-  function roleOptionsForRow(member: Profile): UserRole[] {
-    if (!actorRole) return []
-    if (actorRole === 'admin') return ALL_USER_ROLES
-    if (actorRole === 'marketing_head' && canEditProfileRole(actorRole, member.role)) {
-      return HEAD_ASSIGNABLE_ROLES
-    }
-    if (actorRole === 'designer_head' && canEditProfileRole(actorRole, member.role)) {
-      return DESIGNER_HEAD_ASSIGNABLE_ROLES
-    }
-    return []
+  if (loading && !members.length) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+      </div>
+    )
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-text)]">Team Members</h1>
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Manage your organization's team members and their roles.
-          </p>
+    <div className="mx-auto w-full max-w-[1400px] space-y-8 animate-in fade-in duration-700">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-4">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text)] lg:text-5xl">Performance Hub</h1>
+            <p className="mt-2 text-[var(--color-text-muted)] text-lg font-medium opacity-80">
+              Orchestrating talent across core marketing and design functions
+            </p>
+          </div>
         </div>
+
+        <div className="flex items-center gap-3">
+          <div className="relative group">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] transition-colors group-focus-within:text-[var(--color-accent)]" />
+            <input
+              type="text"
+              placeholder="Search members..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="h-11 w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/50 pl-10 pr-4 text-sm ring-[var(--color-accent)]/20 transition-all focus:bg-[var(--color-surface)] focus:ring-4 focus:outline-none"
+            />
+          </div>
+          {isElevated && (
+            <Button
+              onClick={() => { setFormError(null); setOpen(true) }}
+              className="h-11 rounded-xl bg-[var(--color-accent)] px-6 font-bold text-white shadow-xl shadow-[var(--color-accent)]/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
+            >
+              <UserPlus className="h-4 w-4" />
+              Add Member
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {loadError && (
+        <Card className="border-red-500/20 bg-red-500/5 backdrop-blur-xl p-6">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-red-600 dark:text-red-400 font-medium">{loadError}</p>
+            <Button variant="secondary" onClick={() => void load()}>Retry</Button>
+          </div>
+        </Card>
+      )}
+
+      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        {filteredMembers.map((m) => {
+          const stats = statsMap.get(m.id) || { done: 0, active: 0, pending: 0, performance: 0 }
+          const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${m.full_name}&backgroundColor=b6e3f4,c0aede,d1d4f9`
+
+          return (
+            <Card
+              key={m.id}
+              className="group relative overflow-hidden border-[var(--color-border)] bg-[var(--color-surface-2)]/40 p-6 backdrop-blur-xl transition-all hover:border-[var(--color-accent)]/50 hover:shadow-2xl hover:shadow-[var(--color-accent)]/5"
+            >
+              <div className="relative z-10 flex items-start justify-between">
+                <div className="flex gap-4">
+                  <div className="relative h-16 w-16 overflow-hidden rounded-2xl ring-2 ring-[var(--color-border)] transition-all group-hover:ring-[var(--color-accent)]/40">
+                    <img src={avatarUrl} alt={m.full_name} className="h-full w-full object-cover" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-[var(--color-text)]">{m.full_name}</h3>
+                    <p className="text-xs font-black uppercase tracking-widest text-[var(--color-accent)] opacity-80">
+                      {ROLE_LABEL[m.role] || m.role}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-3xl font-black text-[var(--color-text)]">{stats.performance}%</span>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)] opacity-60">Performance</p>
+                </div>
+              </div>
+
+              <div className="mt-8 space-y-4">
+                <div>
+                  <div className="mb-2 flex justify-between text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">
+                    <span>Account Health</span>
+                    <span>{stats.performance}%</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--color-border)]">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[var(--color-accent)] to-purple-500 transition-all duration-1000"
+                      style={{ width: `${stats.performance}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Done', val: stats.done, color: 'text-emerald-500 bg-emerald-500/5' },
+                    { label: 'Active', val: stats.active, color: 'text-indigo-500 bg-indigo-500/5' },
+                    { label: 'Pending', val: stats.pending, color: 'text-amber-500 bg-amber-500/5' }
+                  ].map(s => (
+                    <div key={s.label} className={`rounded-xl p-3 text-center transition-colors group-hover:bg-white/5 ${s.color}`}>
+                      <span className="block text-xl font-black">{s.val}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="absolute -right-4 -top-4 h-32 w-32 rounded-full bg-[var(--color-accent)] opacity-0 blur-[80px] transition-all group-hover:opacity-10" />
+            </Card>
+          )
+        })}
+
         {isElevated && (
-          <Button
-            type="button"
-            onClick={() => {
-              setFormError(null)
-              setOpen(true)
-            }}
-            className="w-full bg-[var(--color-accent)] text-white hover:opacity-90 sm:w-auto"
+          <button
+            disabled={activeTab !== 'all'}
+            onClick={() => { setFormError(null); setOpen(true) }}
+            className="group relative flex min-h-[300px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)]/20 p-8 transition-all hover:border-[var(--color-accent)]/50 hover:bg-[var(--color-surface-2)]/40 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <UserPlus className="h-4 w-4 shrink-0" />
-            Add Team Member
-          </Button>
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-surface-2)] ring-1 ring-[var(--color-border)] transition-all group-hover:scale-110 group-hover:ring-[var(--color-accent)]/50">
+              <UserPlus className="h-6 w-6 text-[var(--color-text-muted)] group-hover:text-[var(--color-accent)]" />
+            </div>
+            <h3 className="mt-4 text-lg font-bold text-[var(--color-text)]">Onboard Member</h3>
+            <p className="mt-1 text-sm text-[var(--color-text-muted)] text-center max-w-[200px]">Expand your marketing team and track performance</p>
+          </button>
         )}
       </div>
 
-      {!isElevated ? (
-        <Card className="flex gap-3 border-[var(--color-border)] bg-[var(--color-surface-2)]">
-          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-[var(--color-text-muted)]" />
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Only <strong className="text-[var(--color-text)]">Admin</strong> and{' '}
-            <strong className="text-[var(--color-text)]">Marketing Head</strong> can invite people or change roles.
-          </p>
-        </Card>
-      ) : (
-        <Card className="border-emerald-500/25 bg-emerald-500/5">
-          <p className="text-sm text-[var(--color-text)]">
-            <strong>Direct Signup:</strong> When you add a team member, they can log in immediately using the email and password you provided. Please share the temporary password with them securely.
-          </p>
-        </Card>
-      )}
-
-      {banner ? (
-        <Card className="flex items-start justify-between gap-3 border-emerald-500/30 bg-emerald-500/10">
-          <p className="text-sm text-emerald-900 dark:text-emerald-100">{banner}</p>
-          <button
-            type="button"
-            className="shrink-0 text-sm font-medium text-emerald-800 underline dark:text-emerald-200"
-            onClick={() => setBanner(null)}
-          >
-            Dismiss
-          </button>
-        </Card>
-      ) : null}
-
-      {loadError ? (
-        <Card className="border-red-500/40 bg-red-500/10">
-          <p className="text-sm text-red-700 dark:text-red-300">{loadError}</p>
-          <Button type="button" variant="secondary" className="mt-2" onClick={() => void load()}>
-            Retry
-          </Button>
-        </Card>
-      ) : null}
-
-      {loading ? (
-        <p className="text-sm text-[var(--color-text-muted)]">Loading team…</p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-[var(--color-border)]">
-          <table className="w-full min-w-[520px] text-left text-sm">
-            <thead className="border-b border-[var(--color-border)] bg-[var(--color-surface-2)]">
-              <tr>
-                <th className="p-3 font-medium text-[var(--color-text)]">Name</th>
-                <th className="p-3 font-medium text-[var(--color-text)]">Email</th>
-                <th className="p-3 font-medium text-[var(--color-text)]">Role</th>
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((m) => {
-                const opts = roleOptionsForRow(m)
-                const editable = isElevated && opts.length > 0 && canEditProfileRole(actorRole, m.role)
-                return (
-                  <tr key={m.id} className="border-b border-[var(--color-border)] last:border-0">
-                    <td className="p-3 font-medium text-[var(--color-text)]">{m.full_name || '—'}</td>
-                    <td className="max-w-[200px] truncate p-3 text-[var(--color-text-muted)]">{m.email ?? '—'}</td>
-                    <td className="p-3">
-                      {editable ? (
-                        <select
-                          className="w-full max-w-[200px] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-sm"
-                          value={m.role}
-                          disabled={savingId === m.id}
-                          onChange={(e) => void updateMemberRole(m, e.target.value as UserRole)}
-                        >
-                          {opts.map((r: UserRole) => (
-                            <option key={r} value={r}>
-                              {ROLE_LABEL[r] ?? r}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="text-[var(--color-text)]">{ROLE_LABEL[m.role] ?? m.role}</span>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <Modal open={open} onClose={() => setOpen(false)} title="Add employee" wide>
-        <form onSubmit={handleAddEmployee} className="flex flex-col gap-3">
-          {formError ? (
-            <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+      <Modal open={open} onClose={() => setOpen(false)} title="Onboard New Talent" wide>
+        <form onSubmit={handleAddEmployee} className="grid gap-6 py-4">
+          {formError && (
+            <div className="flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-500 font-medium">
+              <ShieldAlert className="h-5 w-5" />
               {formError}
-            </p>
-          ) : null}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">Full name *</label>
-            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required placeholder="Jane Doe" />
+            </div>
+          )}
+
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Full name</label>
+              <Input
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                required
+                placeholder="Jane Doe"
+                className="h-12 bg-[var(--color-surface-2)]/50 border-[var(--color-border)] focus:ring-[var(--color-accent)]/20"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Email Address</label>
+              <Input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                placeholder="jane@novox.io"
+                className="h-12 bg-[var(--color-surface-2)]/50 border-[var(--color-border)] focus:ring-[var(--color-accent)]/20"
+              />
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">Work email *</label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="jane@company.com"
-              autoComplete="off"
-            />
+
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Temporary Password</label>
+              <Input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                minLength={6}
+                placeholder="••••••••"
+                className="h-12 bg-[var(--color-surface-2)]/50 border-[var(--color-border)] focus:ring-[var(--color-accent)]/20"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Primary Role</label>
+              <select
+                className="h-12 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/50 px-4 text-sm transition-all focus:border-[var(--color-accent)] focus:outline-none focus:ring-4 focus:ring-[var(--color-accent)]/20"
+                value={newRole}
+                onChange={e => setNewRole(e.target.value as UserRole)}
+              >
+                {rolesForNewEmployee.map(r => (
+                  <option key={r} value={r}>{ROLE_LABEL[r as UserRole] ?? r}</option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">
-              Temporary password * (min 6 characters)
-            </label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              placeholder="••••••••"
-              autoComplete="new-password"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--color-text-muted)]">Role *</label>
-            <select
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
-              value={newRole}
-              onChange={(e) => setNewRole(e.target.value as UserRole)}
+
+          <div className="mt-4 flex gap-3">
+            <Button
+              type="submit"
+              className="flex-1 h-12 rounded-xl bg-[var(--color-accent)] font-bold text-white shadow-xl shadow-[var(--color-accent)]/20"
+              disabled={submitting}
             >
-              {rolesForNewEmployee.map((r: UserRole) => (
-                <option key={r} value={r}>
-                  {ROLE_LABEL[r] ?? r}
-                </option>
-              ))}
-            </select>
-            {actorRole === 'marketing_head' ? (
-              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                Marketing Heads can only add Marketing Executives and Designers. Ask an Admin to create Admin or Head accounts.
-              </p>
-            ) : null}
-            {actorRole === 'designer_head' ? (
-              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                Designer Heads can only add Designers. Ask an Admin to create Head accounts.
-              </p>
-            ) : null}
-          </div>
-          <div className="sticky bottom-0 flex flex-col gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface)] pt-4 sm:static sm:border-0 sm:pt-0">
-            <Button type="submit" className="w-full !text-white" disabled={submitting}>
-              {submitting ? 'Creating…' : 'Create account'}
+              {submitting ? 'Initializing Account...' : 'Confirm Recruitment'}
             </Button>
-            <Button type="button" variant="secondary" className="w-full" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-12 rounded-xl bg-white/5 border border-white/10"
+              onClick={() => setOpen(false)}
+            >
               Cancel
             </Button>
           </div>
         </form>
       </Modal>
+
+      {banner && (
+        <div className="fixed bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-4 rounded-2xl bg-emerald-500 p-4 font-bold text-white shadow-2xl animate-in slide-in-from-bottom-8">
+          <span>{banner}</span>
+          <button onClick={() => setBanner(null)} className="rounded-lg bg-white/20 p-1 hover:bg-white/30">
+            Dismiss
+          </button>
+        </div>
+      )}
     </div>
   )
 }

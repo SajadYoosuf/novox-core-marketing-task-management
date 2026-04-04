@@ -6,6 +6,8 @@ export type TaskStatus =
   | 'in_progress'
   | 'review'
   | 'approved'
+  | 'scheduled'
+  | 'posted'
   | 'completed'
   | 'rejected'
 export type PlatformType = 'instagram' | 'facebook' | 'linkedin' | 'gmb' | 'website' | 'whatsapp' | 'threads'
@@ -88,6 +90,10 @@ export interface Subtask {
   title: string
   is_done: boolean
   sort_order: number
+  client_platform_id: string | null
+  assigned_user_id: string | null
+  client_platforms?: ClientPlatform | null
+  assignee?: Profile | null
 }
 
 export interface Submission {

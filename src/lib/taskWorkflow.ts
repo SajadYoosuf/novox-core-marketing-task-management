@@ -1,5 +1,4 @@
 import type { TaskStatus } from '@/types/db'
-import { STATUS_ORDER } from '@/lib/constants'
 
 export function canPlatformMoveToReview(
   submissionRequired: boolean,
@@ -16,6 +15,8 @@ export function nextPlatformStatus(current: TaskStatus): TaskStatus | null {
     'in_progress',
     'review',
     'approved',
+    'scheduled',
+    'posted',
     'completed',
   ]
   const i = flow.indexOf(current)
@@ -30,6 +31,8 @@ export function previousPlatformStatus(current: TaskStatus): TaskStatus | null {
     'in_progress',
     'review',
     'approved',
+    'scheduled',
+    'posted',
     'completed',
   ]
   const i = flow.indexOf(current)
@@ -37,8 +40,13 @@ export function previousPlatformStatus(current: TaskStatus): TaskStatus | null {
   return flow[i - 1]!
 }
 
-/** Overall task status uses same ordering for Kanban columns */
+/** Overall task status uses same ordering for Kanban columns - limited to Active statuses per user request */
 export const KANBAN_COLUMNS: TaskStatus[] = [
-  ...STATUS_ORDER,
-  'rejected',
+  'pending',
+  'assigned',
+  'in_progress',
+  'review',
+  'approved',
+  'scheduled',
+  'posted',
 ]

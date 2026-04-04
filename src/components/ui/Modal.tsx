@@ -1,7 +1,6 @@
 import { X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Button } from './Button'
 
 export function Modal({
   open,
@@ -9,12 +8,14 @@ export function Modal({
   title,
   children,
   wide,
+  noHeaderStyles,
 }: {
   open: boolean
   onClose: () => void
-  title: string
+  title: ReactNode
   children: ReactNode
   wide?: boolean
+  noHeaderStyles?: boolean
 }) {
   if (!open) return null
   if (typeof document === 'undefined') return null
@@ -24,7 +25,7 @@ export function Modal({
       <button
         type="button"
         aria-label="Close overlay"
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
         onClick={onClose}
       />
       <div
@@ -35,14 +36,29 @@ export function Modal({
           wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'
         }`}
       >
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <h2 id="modal-title" className="text-lg font-semibold text-[var(--color-text)]">
-            {title}
-          </h2>
-          <Button variant="ghost" className="!shrink-0 !p-1" onClick={onClose} aria-label="Close">
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
+        {!noHeaderStyles && (
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <h2 id="modal-title" className="text-lg font-bold text-[var(--color-text)]">
+              {title}
+            </h2>
+            <button 
+              type="button" 
+              className="p-2 -mr-2 rounded-xl text-[var(--color-text-muted)] hover:bg-white/5 transition-all cursor-pointer" 
+              onClick={onClose}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+        {noHeaderStyles && (
+           <button 
+           type="button" 
+           className="absolute top-8 right-8 z-[110] p-3 rounded-2xl bg-white/5 border border-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-all cursor-pointer" 
+           onClick={onClose}
+         >
+           <X className="h-5 w-5" />
+         </button>
+        )}
         {children}
       </div>
     </div>,

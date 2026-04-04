@@ -4,10 +4,9 @@ import {
   Users,
   UserCog,
   KanbanSquare,
-  Table2,
   CalendarDays,
   Bell,
-  Sparkles,
+  Rocket,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuthStore } from '@/stores/authStore'
@@ -25,11 +24,18 @@ export function Sidebar() {
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)]">
-      <div className="flex min-h-14 items-center gap-2 border-b border-[var(--color-border)] px-4 py-2">
-        <Sparkles className="h-6 w-6 shrink-0 text-[var(--color-accent)]" />
-        <span className="text-sm font-semibold leading-tight tracking-tight text-[var(--color-text)]">
-          Novox Core Marketing
-        </span>
+      <div className="flex min-h-[70px] items-center gap-3 border-b border-[var(--color-border)] px-6 py-2">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--color-accent)] to-purple-600 shadow-lg shadow-[var(--color-accent)]/20">
+          <Rocket className="h-6 w-6 text-white" />
+        </div>
+        <div className="flex flex-col">
+          <span className="text-base font-bold leading-none tracking-tight text-[var(--color-text)]">
+            MarketingOS
+          </span>
+          <span className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)] opacity-60">
+            Workflow Manager
+          </span>
+        </div>
       </div>
       <nav className="flex flex-1 flex-col gap-1 p-3">
         <NavLink to="/app/dashboard" className={linkClass}>
@@ -47,10 +53,6 @@ export function Sidebar() {
         <NavLink to="/app/tasks" className={linkClass}>
           <KanbanSquare className="h-4 w-4 shrink-0" />
           Tasks
-        </NavLink>
-        <NavLink to="/app/tasks/table" className={linkClass}>
-          <Table2 className="h-4 w-4 shrink-0" />
-          Table
         </NavLink>
         <NavLink to="/app/calendar" className={linkClass}>
           <CalendarDays className="h-4 w-4 shrink-0" />

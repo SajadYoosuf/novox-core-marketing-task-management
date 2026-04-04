@@ -10,7 +10,6 @@ import { Dashboard } from '@/pages/Dashboard'
 import { Clients } from '@/pages/Clients'
 import { ClientDetail } from '@/pages/ClientDetail'
 import { TasksKanban } from '@/pages/TasksKanban'
-import { TasksTable } from '@/pages/TasksTable'
 import { Calendar } from '@/pages/Calendar'
 import { TaskDetail } from '@/pages/TaskDetail'
 import { Notifications } from '@/pages/Notifications'
@@ -86,7 +85,6 @@ export default function App() {
           <Route path="clients/:id" element={<ClientDetail />} />
           <Route path="team" element={<Team />} />
           <Route path="tasks" element={<TasksKanban />} />
-          <Route path="tasks/table" element={<TasksTable />} />
           <Route path="tasks/:id" element={<TaskDetail />} />
           <Route path="calendar" element={<Calendar />} />
           <Route path="notifications" element={<Notifications />} />
