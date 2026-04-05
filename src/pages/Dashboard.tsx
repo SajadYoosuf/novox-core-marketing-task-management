@@ -61,13 +61,15 @@ export function Dashboard() {
         profilesRes,
         logsRes,
         assigneesRes,
-        platformsRes
+        platformsRes,
+        subtasksRes
       ] = await Promise.all([
         supabase.from('tasks').select('id, status, deadline, title, clients(name)'),
         supabase.from('profiles').select('*'),
         supabase.from('performance_logs').select('*').order('created_at', { ascending: false }),
         supabase.from('task_assignees').select('*'),
-        supabase.from('task_platforms').select('*')
+        supabase.from('task_platforms').select('*'),
+        supabase.from('subtasks').select('task_id, assigned_user_id')
       ])
 
       const safeTasks = tasksRes.data || []
@@ -75,12 +77,13 @@ export function Dashboard() {
       const safeLogs = logsRes.data || []
       const safeAssignees = assigneesRes.data || []
       const safePlatforms = platformsRes.data || []
+      const safeSubtasks = subtasksRes.data || []
 
       // 1. Stats
       const now = new Date()
       setStats({
         total: safeTasks.length,
-        inProgress: safeTasks.filter(t => t.status === 'in_progress' || t.status === 'assigned').length,
+        inProgress: safeTasks.filter(t => t.status === 'in_progress').length,
         pendingReview: safeTasks.filter(t => t.status === 'review').length,
         overdue: safeTasks.filter(t =>
           t.status !== 'completed' && t.status !== 'approved' &&
@@ -94,10 +97,12 @@ export function Dashboard() {
       safeProfiles.forEach(p => {
         const userTaskIds = new Set([
           ...safeAssignees.filter(a => a.user_id === p.id).map(a => a.task_id),
-          ...safePlatforms.filter(tp => tp.assigned_user_id === p.id).map(tp => tp.task_id)
+          ...safePlatforms.filter(tp => tp.assigned_user_id === p.id).map(tp => tp.task_id),
+          ...safeSubtasks.filter(st => st.assigned_user_id === p.id).map(st => st.task_id)
         ])
         const activeCount = safeTasks.filter(t =>
-          userTaskIds.has(t.id) && t.status !== 'completed' && t.status !== 'approved'
+          userTaskIds.has(t.id) && 
+          t.status !== 'completed' && t.status !== 'approved' && t.status !== 'pending'
         ).length
         byUser.set(p.id, { completed: 0, delayed: 0, rejected: 0, activeTasks: activeCount })
       })
@@ -211,7 +216,7 @@ export function Dashboard() {
         <Card className="group relative overflow-hidden border-[var(--color-border)] bg-[var(--color-surface-2)]/40 p-6 backdrop-blur-xl hover:border-[var(--color-accent)]/30 transition-all">
           <div className="flex justify-between">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Approval Pipeline</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Pending Review</p>
               <h3 className="mt-2 text-4xl font-black text-[var(--color-text)]">{stats.pendingReview}</h3>
             </div>
             <FileCheck className="h-6 w-6 text-purple-500 opacity-20" />
@@ -259,7 +264,7 @@ export function Dashboard() {
 
         <Card className="lg:col-span-4 space-y-8 border-[var(--color-border)] bg-[var(--color-surface-2)]/40 p-8 backdrop-blur-xl">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold tracking-tight text-[var(--color-text)]">Team Synchronization</h2>
+            <h2 className="text-xl font-bold tracking-tight text-[var(--color-text)]">Team Overview</h2>
             <div className="rounded-lg bg-white/5 px-3 py-1.5 text-[10px] font-bold text-[var(--color-text-muted)] border border-white/5">
               REAL-TIME
             </div>
@@ -301,12 +306,12 @@ export function Dashboard() {
                 <div className="space-y-1">
                   <p className="text-[10px] font-bold text-[var(--color-text-muted)]">{formatDistanceToNow(parseISO(act.timestamp))} ago</p>
                   <p className="text-sm font-bold text-[var(--color-text)] leading-snug">
-                    {act.event === 'task_completed' ? `Task mission finalized by ${act.userName}` :
+                    {act.event === 'task_completed' ? `Task completed by ${act.userName}` :
                       act.event === 'task_rejected' ? `Feedback provided by Head Office` :
                         `${act.userName} updated task status`}
                   </p>
                   <p className="text-[11px] text-[var(--color-text-muted)] leading-relaxed opacity-60">
-                    Synchronized with MarketingOS Task Core.
+                    Updated just now.
                   </p>
                 </div>
               </div>
@@ -318,7 +323,7 @@ export function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-4">
         <Card className="lg:col-span-3 space-y-6 border-[var(--color-border)] bg-[var(--color-surface-2)]/40 p-8 backdrop-blur-xl">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold tracking-tight text-[var(--color-text)]">Deliverable Pipeline</h2>
+            <h2 className="text-xl font-bold tracking-tight text-[var(--color-text)]">Pending Reviews</h2>
             <span className="rounded-full bg-pink-500/10 px-3 py-1 text-[10px] font-black text-pink-500 tracking-widest uppercase">
               {approvals.length} PENDING REVIEW
             </span>
@@ -338,7 +343,7 @@ export function Dashboard() {
                     </span>
                     <h4 className="font-bold text-[var(--color-text)]">{app.clients?.name} - {app.title}</h4>
                   </div>
-                  <p className="text-xs text-[var(--color-text-muted)] opacity-60">Task quality check passed • Syncing...</p>
+                  <p className="text-xs text-[var(--color-text-muted)] opacity-60">Waiting for approval</p>
                 </div>
                 <Button variant="secondary" className="bg-white/5 border-white/10 text-xs px-6 py-2 h-9 rounded-xl font-bold hover:bg-white/10 transition-all">
                   Inspect
@@ -347,7 +352,7 @@ export function Dashboard() {
             ))}
             {approvals.length === 0 && (
               <div className="py-12 text-center">
-                <p className="text-sm text-[var(--color-text-muted)] italic">Pipeline clear. No pending reviews detected.</p>
+                <p className="text-sm text-[var(--color-text-muted)] italic">All clear! No tasks waiting for review.</p>
               </div>
             )}
           </div>

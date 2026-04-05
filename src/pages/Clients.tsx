@@ -59,7 +59,7 @@ export function Clients() {
     e.preventDefault()
     if (!user || !supabaseConfigured) return
     setSubmitting(true)
-    
+
     if (editingClient) {
       await supabase.from('clients').update({
         name,
@@ -78,7 +78,7 @@ export function Clients() {
         created_by: user.id
       })
     }
-    
+
     setName(''); setIndustry(''); setEmail(''); setPhone(''); setNotes('');
     setEditingClient(null)
     setOpen(false)
@@ -152,9 +152,7 @@ export function Clients() {
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-surface)] shadow-lg ring-1 ring-white/10">
                     <Building2 className="h-7 w-7 text-[var(--color-accent)]" />
                   </div>
-                  <button className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-text-muted)] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/5 hover:text-[var(--color-text)]">
-                    <MoreHorizontal className="h-5 w-5" />
-                  </button>
+
                 </div>
                 <div className="mt-4">
                   <h3 className="text-xl font-bold tracking-tight text-[var(--color-text)] transition-colors group-hover:text-[var(--color-accent)]">
@@ -183,8 +181,8 @@ export function Clients() {
                     <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
                     <span className="text-[10px] font-bold text-[var(--color-text-muted)]">Active Account</span>
                   </div>
-                  <Button 
-                    variant="secondary" 
+                  <Button
+                    variant="secondary"
                     className="h-8 rounded-lg bg-white/5 border-white/5 px-4 text-[10px] font-black uppercase tracking-widest text-[var(--color-text)] hover:bg-white/10 transition-all pointer-events-none"
                   >
                     Details
@@ -231,15 +229,15 @@ export function Clients() {
               <div className="flex gap-2">
                 {isElevated && (
                   <>
-                    <Button 
-                      variant="secondary" 
+                    <Button
+                      variant="secondary"
                       className="h-10 rounded-xl bg-white/5 border-white/10 font-bold px-5 hover:bg-white/10"
                       onClick={() => { setEditingClient(activeClient); setInfoOpen(false); setOpen(true); }}
                     >
                       Refine Brand
                     </Button>
-                    <Button 
-                      variant="secondary" 
+                    <Button
+                      variant="secondary"
                       className="h-10 rounded-xl bg-red-500/10 border-red-500/20 text-red-500 font-bold px-5 hover:bg-red-500/20"
                       onClick={() => { handleDelete(activeClient.id); setInfoOpen(false); }}
                     >
@@ -271,16 +269,16 @@ export function Clients() {
               </div>
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.1em] text-[var(--color-text-muted)] opacity-60">
-                  <MoreHorizontal className="h-3 w-3" /> Strategic Insights
+                  <MoreHorizontal className="h-3 w-3" /> Notes
                 </label>
                 <div className="text-sm font-medium leading-relaxed text-[var(--color-text)]/80 bg-white/5 p-4 rounded-xl border border-white/5 min-h-[140px] whitespace-pre-wrap">
-                  {activeClient.contact_notes || 'No strategic observations recorded for this partner.'}
+                  {activeClient.contact_notes || 'No notes added yet.'}
                 </div>
               </div>
             </div>
 
             <div className="pt-4 flex justify-center">
-              <a 
+              <a
                 href={`/app/clients/${activeClient.id}`}
                 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-accent)] hover:underline underline-offset-8"
               >
@@ -317,7 +315,7 @@ export function Clients() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-[0.1em] text-[var(--color-text-muted)] opacity-60">Internal Strategic Notes</label>
+            <label className="text-[10px] font-black uppercase tracking-[0.1em] text-[var(--color-text-muted)] opacity-60">Notes</label>
             <TextArea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Key objectives, brand guidelines links..." rows={3} className="bg-[var(--color-surface-2)]/50 border-[var(--color-border)]" />
           </div>
 

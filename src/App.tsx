@@ -27,10 +27,15 @@ function Protected({ children }: { children: ReactNode }) {
   return children
 }
 
+import { useNotifications } from '@/hooks/useNotifications'
+ 
 export default function App() {
   const initAuth = useAuthStore((s) => s.init)
   const initTheme = useThemeStore((s) => s.initTheme)
   const setSession = useAuthStore((s) => s.setSession)
+  
+  // Initialize Global Mobile/Browser Notifications
+  useNotifications()
 
   useEffect(() => {
     initTheme()

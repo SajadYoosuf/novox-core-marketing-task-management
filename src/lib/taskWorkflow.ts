@@ -1,17 +1,8 @@
 import type { TaskStatus } from '@/types/db'
 
-export function canPlatformMoveToReview(
-  submissionRequired: boolean,
-  submissionsCount: number,
-): boolean {
-  if (!submissionRequired) return true
-  return submissionsCount > 0
-}
-
 export function nextPlatformStatus(current: TaskStatus): TaskStatus | null {
   const flow: TaskStatus[] = [
     'pending',
-    'assigned',
     'in_progress',
     'review',
     'approved',
@@ -27,7 +18,6 @@ export function nextPlatformStatus(current: TaskStatus): TaskStatus | null {
 export function previousPlatformStatus(current: TaskStatus): TaskStatus | null {
   const flow: TaskStatus[] = [
     'pending',
-    'assigned',
     'in_progress',
     'review',
     'approved',
@@ -43,10 +33,10 @@ export function previousPlatformStatus(current: TaskStatus): TaskStatus | null {
 /** Overall task status uses same ordering for Kanban columns - limited to Active statuses per user request */
 export const KANBAN_COLUMNS: TaskStatus[] = [
   'pending',
-  'assigned',
   'in_progress',
   'review',
   'approved',
   'scheduled',
   'posted',
 ]
+

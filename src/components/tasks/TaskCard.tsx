@@ -91,6 +91,36 @@ export function TaskCard({ task, onClick, onTalentClick }: TaskCardProps) {
           </p>
         </div>
 
+        {/* Unified Subtask List (Design + Marketing) */}
+        {task.subtasks && task.subtasks.length > 0 && (
+          <div className="mt-4 space-y-1.5 border-l-2 border-white/5 pl-4 py-1">
+            {task.subtasks.slice(0, 4).map(st => {
+              const assignee = st.profiles || null
+              const isPlatform = (st as any).is_platform
+              return (
+                <div key={st.id} className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${st.is_done ? 'bg-emerald-500/40' : (isPlatform ? 'bg-blue-500' : 'bg-indigo-500')}`} />
+                    <span className={`text-[10px] font-bold truncate ${st.is_done ? 'text-[#4F5B76] line-through' : 'text-white/70'}`}>
+                      {st.title}
+                    </span>
+                  </div>
+                  {assignee && (
+                    <span className="text-[8px] font-black uppercase text-[#4F5B76] tracking-tighter whitespace-nowrap bg-white/5 px-1.5 py-0.5 rounded-md">
+                      {assignee.full_name.split(' ')[0]}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+            {task.subtasks.length > 4 && (
+              <p className="text-[8px] font-black uppercase tracking-[0.2em] text-[#4F5B76] opacity-40 ml-4 pt-1">
+                + {task.subtasks.length - 4} units more
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Subtask Progress */}
         {totalSubtasks > 0 && (
           <div className="mt-6 space-y-2">

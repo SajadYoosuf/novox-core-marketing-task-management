@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, Filter, LayoutGrid, ChevronDown, Search, Users } from 'lucide-react'
+import { Plus, Filter, LayoutGrid, Search, Users } from 'lucide-react'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/Button'
@@ -7,6 +7,7 @@ import { KanbanBoard } from '@/components/tasks/KanbanBoard'
 import { CreateTaskModal } from '@/components/tasks/CreateTaskModal'
 import { TaskDetailDrawer } from '@/components/tasks/TaskDetailDrawer'
 import { TalentTasksDrawer } from '@/components/tasks/TalentTasksDrawer'
+import { CustomDropdown } from '@/components/ui/CustomDropdown'
 import type { Client, TaskWithRelations, Profile } from '@/types/db'
 import { PLATFORM_LABEL } from '@/lib/constants'
 import { logPerformance } from '@/lib/performance'
@@ -47,16 +48,38 @@ export function TasksKanban() {
       const cpMap = new Map((cpRes.data ?? []).map(cp => [cp.id, cp]))
       const profMap = new Map((profileRes.data ?? []).map(p => [p.id, p]))
 
-      const assembled = (taskRes.data ?? []).map(t => ({
-        ...t,
-        subtasks: (subtaskRes.data ?? []).filter(s => s.task_id === t.id),
-        task_assignees: (assigneeRes.data ?? [])
-          .filter(a => a.task_id === t.id)
-          .map(a => ({ ...a, profiles: profMap.get(a.user_id) ?? null })),
-        task_platforms: (platformRes.data ?? [])
+      const assembled = (taskRes.data ?? []).map(t => {
+        const tSubtasks = (subtaskRes.data ?? [])
+          .filter(s => s.task_id === t.id)
+          .map(s => ({ ...s, profiles: profMap.get(s.assigned_user_id) ?? null }))
+
+        const tPlatforms = (platformRes.data ?? [])
           .filter(tp => tp.task_id === t.id)
-          .map(tp => ({ ...tp, client_platforms: cpMap.get(tp.client_platform_id) ?? null })),
-      })) as TaskWithRelations[]
+          .map(tp => {
+            const cp = cpMap.get(tp.client_platform_id)
+            return {
+              id: tp.id,
+              task_id: t.id,
+              title: `Post on ${PLATFORM_LABEL[cp?.platform as keyof typeof PLATFORM_LABEL] || 'Platform'}`,
+              is_done: tp.status === 'posted' || tp.status === 'completed',
+              assigned_user_id: tp.assigned_user_id,
+              profiles: profMap.get(tp.assigned_user_id) ?? null,
+              is_platform: true,
+              platform_status: tp.status
+            }
+          })
+
+        return {
+          ...t,
+          subtasks: [...tSubtasks, ...tPlatforms],
+          task_assignees: (assigneeRes.data ?? [])
+            .filter(a => a.task_id === t.id)
+            .map(a => ({ ...a, profiles: profMap.get(a.user_id) ?? null })),
+          task_platforms: (platformRes.data ?? [])
+            .filter(tp => tp.task_id === t.id)
+            .map(tp => ({ ...tp, client_platforms: cpMap.get(tp.client_platform_id) ?? null })),
+        }
+      }) as TaskWithRelations[]
 
       setTasks(assembled)
     } catch (err) {
@@ -83,10 +106,18 @@ export function TasksKanban() {
     }
     if (filterClient) list = list.filter((t) => t.client_id === filterClient)
     if (filterPlatform) {
-      list = list.filter((t) =>
-        t.subtasks?.some(s => (s as any).client_platforms?.platform === filterPlatform) ||
-        t.task_platforms?.some(tp => (tp.client_platforms as any)?.platform === filterPlatform)
-      )
+      if (filterPlatform === 'creative') {
+        // Show only tasks that have creative subtasks (not linked to platforms)
+        list = list.filter((t) =>
+           t.subtasks?.some(s => !(s as any).is_platform)
+        )
+      } else {
+        // Show tasks linked to that platform (directly or through subtasks)
+        list = list.filter((t) =>
+          t.subtasks?.some(s => (s as any).is_platform && (s as any).client_platforms?.platform === filterPlatform) ||
+          t.task_platforms?.some(tp => (tp.client_platforms as any)?.platform === filterPlatform)
+        )
+      }
     }
     if (filterAssignee) {
       list = list.filter((t) => 
@@ -121,9 +152,9 @@ export function TasksKanban() {
       {/* Header Section */}
       <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between pt-8">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-[var(--color-text)] lg:text-5xl">Marketing Canvas</h1>
+          <h1 className="text-4xl font-black tracking-tight text-[var(--color-text)] lg:text-5xl">Tasks</h1>
           <p className="mt-3 text-lg font-medium text-[var(--color-text-muted)] opacity-60 leading-relaxed">
-            Coordinating {tasks.filter(t => t.status !== 'completed').length} active production units
+            {tasks.filter(t => t.status !== 'completed').length} active tasks
           </p>
         </div>
 
@@ -133,7 +164,7 @@ export function TasksKanban() {
             className="h-14 rounded-2xl bg-[var(--color-accent)] px-8 font-black uppercase tracking-widest text-white shadow-2xl shadow-[var(--color-accent)]/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
           >
             <Plus className="h-5 w-5" />
-            New Tactical Task
+            New Task
           </Button>
         </div>
       </div>
@@ -141,57 +172,39 @@ export function TasksKanban() {
       {/* Filter Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-white/5 pt-6">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative group">
-            <Filter className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
-            <select
-              className="h-11 w-44 appearance-none rounded-2xl border border-white/5 bg-white/[0.03] pl-11 pr-10 text-[10px] font-black uppercase tracking-widest text-[var(--color-text)] cursor-pointer focus:bg-[#0B0D13] focus:ring-4 ring-indigo-500/20"
-              value={filterClient}
-              onChange={(e) => setFilterClient(e.target.value)}
-            >
-              <option value="">All Brands</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)] opacity-40" />
-          </div>
+          <CustomDropdown 
+            options={clients.map(c => ({ id: c.id, name: c.name }))}
+            value={filterClient}
+            onChange={setFilterClient}
+            placeholder="All Brands"
+            icon={<Filter className="h-4 w-4" />}
+          />
 
-          <div className="relative group">
-            <LayoutGrid className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
-            <select
-              className="h-11 w-44 appearance-none rounded-2xl border border-white/5 bg-white/[0.03] pl-11 pr-10 text-[10px] font-black uppercase tracking-widest text-[var(--color-text)] cursor-pointer focus:bg-[#0B0D13] focus:ring-4 ring-indigo-500/20"
-              value={filterPlatform}
-              onChange={(e) => setFilterPlatform(e.target.value)}
-            >
-              <option value="">Platform Focus</option>
-              {Object.entries(PLATFORM_LABEL).map(([id, name]) => (
-                <option key={id} value={id}>{name}</option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)] opacity-40" />
-          </div>
+          <CustomDropdown 
+            options={[
+              { id: 'creative', name: 'Creative Design' },
+              ...Object.entries(PLATFORM_LABEL || {}).map(([id, name]) => ({ id, name }))
+            ]}
+            value={filterPlatform}
+            onChange={setFilterPlatform}
+            placeholder="Platform Focus"
+            icon={<LayoutGrid className="h-4 w-4" />}
+          />
 
-          <div className="relative group">
-            <Users className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
-            <select
-              className="h-11 w-44 appearance-none rounded-2xl border border-white/5 bg-white/[0.03] pl-11 pr-10 text-[10px] font-black uppercase tracking-widest text-[var(--color-text)] cursor-pointer focus:bg-[#0B0D13] focus:ring-4 ring-indigo-500/20"
-              value={filterAssignee}
-              onChange={(e) => setFilterAssignee(e.target.value)}
-            >
-              <option value="">Collaborator</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>{p.full_name}</option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)] opacity-40" />
-          </div>
+          <CustomDropdown 
+            options={profiles.map(p => ({ id: p.id, name: p.full_name }))}
+            value={filterAssignee}
+            onChange={setFilterAssignee}
+            placeholder="Team Member"
+            icon={<Users className="h-4 w-4" />}
+          />
         </div>
 
         <div className="relative group min-w-[340px]">
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
           <input
             type="text"
-            placeholder="Search production pipeline..."
+            placeholder="Search tasks..."
             className="h-11 w-full rounded-2xl border border-white/5 bg-white/[0.03] pl-11 pr-4 text-[10px] font-black uppercase tracking-widest text-[var(--color-text)] focus:bg-[#0B0D13] focus:ring-4 ring-indigo-500/20 placeholder:text-[#4F5B76]/40"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

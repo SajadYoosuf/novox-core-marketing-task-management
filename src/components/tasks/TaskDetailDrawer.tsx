@@ -68,9 +68,28 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
         profiles: profMap.get(ta.user_id) ?? null,
       }))
 
+      const tSubtasks = (subtaskRes.data ?? []).map(st => ({
+        ...st,
+        profiles: profMap.get(st.assigned_user_id) ?? null,
+      }))
+
+      const tPlatforms = (platformRes.data ?? []).map(tp => {
+        const cp = cpMap.get(tp.client_platform_id)
+        return {
+          id: tp.id,
+          task_id: tid,
+          title: `Post on ${PLATFORM_LABEL[cp?.platform as keyof typeof PLATFORM_LABEL] || 'Platform'}`,
+          is_done: tp.status === 'posted' || tp.status === 'completed',
+          assigned_user_id: tp.assigned_user_id,
+          profiles: profMap.get(tp.assigned_user_id) ?? null,
+          is_platform: true,
+          client_platform_id: tp.client_platform_id
+        }
+      })
+
       const assembled: TaskWithRelations = {
         ...taskData,
-        subtasks: (subtaskRes.data ?? []) as Subtask[],
+        subtasks: [...tSubtasks, ...tPlatforms] as any,
         task_assignees: enrichedAssignees,
         task_platforms: enrichedPlatforms,
       }
@@ -346,31 +365,46 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
                               <div className="h-5 w-5 rounded-md border-2 border-white/10 hover:border-[var(--color-accent)]/40 transition-colors" />
                             )}
                           </button>
-
                           {/* Title + quick info */}
                           <div
-                            className="flex-1 min-w-0 cursor-pointer"
+                            className="flex-1 min-w-0 cursor-pointer py-1"
                             onClick={() => setExpandedSubtask(isExpanded ? null : st.id)}
                           >
-                            <span className={`text-sm font-medium block truncate ${st.is_done ? 'text-[#4F5B76] line-through' : 'text-white/80'}`}>
-                              {st.title}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-sm font-bold block truncate ${st.is_done ? 'text-[#4F5B76] line-through' : 'text-white/80'}`}>
+                                {st.title}
+                              </span>
+                              {(st as any).is_platform && (
+                                <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-white/5 border border-white/5 
+                                  ${(st as any).platform_status === 'posted' ? 'text-emerald-400 border-emerald-400/20' : 'text-indigo-400'}
+                                `}>
+                                  {(st as any).platform_status || 'PENDING'}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {/* Quick indicators */}
-                          <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0 px-2 group-hover:bg-white/5 rounded-xl py-1 transition-all">
                             {assignee && (
-                              <div className="h-5 w-5 rounded-full bg-indigo-500/20 flex items-center justify-center text-[8px] font-bold text-indigo-400">
-                                {assignee.full_name.charAt(0)}
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-black uppercase text-[#4F5B76] hidden sm:block tracking-widest bg-white/5 px-1.5 py-0.5 rounded-md">
+                                  {assignee.full_name.split(' ')[0]}
+                                </span>
+                                <div className="h-6 w-6 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center text-[9px] font-black text-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
+                                  {assignee.full_name.charAt(0)}
+                                </div>
                               </div>
                             )}
-                            {PlatIcon && <PlatIcon className="h-3.5 w-3.5 text-[#4F5B76]" />}
-                            <button
-                              onClick={() => setExpandedSubtask(isExpanded ? null : st.id)}
-                              className="cursor-pointer"
-                            >
-                              <ChevronDown className={`h-3.5 w-3.5 text-[#4F5B76] transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                            </button>
+                            {PlatIcon && (
+                              <div className="h-6 w-6 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center">
+                                <PlatIcon className="h-3.5 w-3.5 text-[#4F5B76]" />
+                              </div>
+                            )}
+                            <div className="h-4 w-px bg-white/5 mx-1" />
+                            <div className="cursor-pointer hover:text-white transition-colors">
+                              <ChevronDown className={`h-3.5 w-3.5 text-[#4F5B76] transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                            </div>
                           </div>
                         </div>
 

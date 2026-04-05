@@ -5,18 +5,17 @@ import { useAuthStore } from '@/stores/authStore'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { StatusBadge, PlatformBadge } from '@/components/ui/Badge'
-import { TextArea, Input } from '@/components/ui/Input'
+import { TextArea } from '@/components/ui/Input'
 import { PLATFORM_ICON, PLATFORM_LABEL, TASK_CONTENT_TYPES, TASK_CONTENT_TYPE_LABELS } from '@/lib/constants'
 import type { TaskContentType } from '@/lib/constants'
 import type {
   Comment,
   Profile,
   Subtask,
-  Submission,
   TaskPlatformRow,
   TaskRow,
 } from '@/types/db'
-import { canPlatformMoveToReview, nextPlatformStatus, previousPlatformStatus } from '@/lib/taskWorkflow'
+import { nextPlatformStatus, previousPlatformStatus } from '@/lib/taskWorkflow'
 import { format } from 'date-fns'
 import { insertNotification, logPerformance } from '@/lib/performance'
 
@@ -29,7 +28,7 @@ export function TaskDetail() {
   const [task, setTask] = useState<TaskRow | null>(null)
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
   const [platforms, setPlatforms] = useState<TaskPlatformRow[]>([])
-  const [submissionsByPlatform, setSubmissionsByPlatform] = useState<Record<string, Submission[]>>({})
+
   const [comments, setComments] = useState<Comment[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [commentBody, setCommentBody] = useState('')
@@ -43,14 +42,7 @@ export function TaskDetail() {
     const { data: st } = await supabase.from('subtasks').select('*').eq('task_id', id).order('sort_order')
     setSubtasks((st as Subtask[]) ?? [])
     const { data: tp } = await supabase.from('task_platforms').select('*, client_platforms(platform)').eq('task_id', id)
-    const rows = (tp as TaskPlatformRow[]) ?? []
-    setPlatforms(rows)
-    const subMap: Record<string, Submission[]> = {}
-    for (const row of rows) {
-      const { data: subs } = await supabase.from('submissions').select('*').eq('task_platform_id', row.id)
-      subMap[row.id] = (subs as Submission[]) ?? []
-    }
-    setSubmissionsByPlatform(subMap)
+    setPlatforms((tp as TaskPlatformRow[]) ?? [])
     const { data: cm } = await supabase
       .from('comments')
       .select('*, profiles(full_name)')
@@ -77,52 +69,17 @@ export function TaskDetail() {
     if (!supabaseConfigured) return
     await supabase.from('task_platforms').update({ assigned_user_id: assignee || null }).eq('id', tpId)
     if (assignee) {
-      await insertNotification(assignee, 'Platform assignment', 'You were assigned to a platform deliverable.', 'task_assigned', id!)
+      await insertNotification(assignee, 'Platform assigned', 'You were assigned to a platform task.', 'task_assigned', id!)
       await logPerformance(assignee, 'task_assigned', id!, tpId)
     }
     await load()
   }
 
-  async function addLinkSubmission(tpId: string, url: string) {
-    if (!supabaseConfigured || !userId || !url.trim()) return
-    await supabase.from('submissions').insert({
-      task_platform_id: tpId,
-      kind: 'link',
-      url: url.trim(),
-      created_by: userId,
-    })
-    await logPerformance(userId, 'submission_added', id!, tpId)
-    await load()
-  }
-
-  async function addFileSubmission(tpId: string, file: File | null) {
-    if (!supabaseConfigured || !userId || !file) return
-    const path = `${userId}/${tpId}/${Date.now()}-${file.name}`
-    const { error } = await supabase.storage.from('task-submissions').upload(path, file)
-    if (error) {
-      console.error(error)
-      return
-    }
-    await supabase.from('submissions').insert({
-      task_platform_id: tpId,
-      kind: 'file',
-      storage_path: path,
-      file_name: file.name,
-      created_by: userId,
-    })
-    await logPerformance(userId, 'submission_added', id!, tpId)
-    await load()
-  }
 
   async function advancePlatform(tp: TaskPlatformRow) {
     if (!supabaseConfigured) return
-    const subs = submissionsByPlatform[tp.id] ?? []
     const next = nextPlatformStatus(tp.status)
     if (!next) return
-    if (next === 'review' && !canPlatformMoveToReview(tp.submission_required, subs.length)) {
-      alert('Add at least one submission (link or file) before moving to Review.')
-      return
-    }
     await supabase.from('task_platforms').update({ status: next }).eq('id', tp.id)
     const assignee = tp.assigned_user_id
     if (assignee) {
@@ -260,7 +217,6 @@ export function TaskDetail() {
             const pt = tp.client_platforms?.platform
             if (!pt) return null
             const Icon = PLATFORM_ICON[pt]
-            const subs = submissionsByPlatform[tp.id] ?? []
             return (
               <div key={tp.id} className="rounded-lg border border-[var(--color-border)] p-4">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -287,43 +243,7 @@ export function TaskDetail() {
                     ))}
                   </select>
                 </div>
-                <div className="mb-3 space-y-2">
-                  <p className="text-xs font-medium text-[var(--color-text)]">Submissions</p>
-                  {subs.map((s) => (
-                    <div key={s.id} className="text-xs text-[var(--color-text-muted)]">
-                      {s.kind === 'link' ? (
-                        <a href={s.url ?? '#'} className="text-[var(--color-accent)] hover:underline" target="_blank" rel="noreferrer">
-                          {s.url}
-                        </a>
-                      ) : (
-                        <span>{s.file_name ?? s.storage_path}</span>
-                      )}
-                    </div>
-                  ))}
-                  <div className="flex flex-wrap gap-2">
-                    <form
-                      className="flex flex-1 flex-wrap gap-2"
-                      onSubmit={(e) => {
-                        e.preventDefault()
-                        const fd = new FormData(e.currentTarget)
-                        const url = String(fd.get('url') ?? '')
-                        void addLinkSubmission(tp.id, url)
-                        e.currentTarget.reset()
-                      }}
-                    >
-                      <Input name="url" placeholder="Proof URL" className="max-w-sm flex-1" />
-                      <Button type="submit">Add link</Button>
-                    </form>
-                    <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-[var(--color-text-muted)]">
-                      <input
-                        type="file"
-                        className="hidden"
-                        onChange={(e) => void addFileSubmission(tp.id, e.target.files?.[0] ?? null)}
-                      />
-                      <span className="rounded-lg border border-[var(--color-border)] px-3 py-2">Upload file</span>
-                    </label>
-                  </div>
-                </div>
+
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" onClick={() => void advancePlatform(tp)}>
                     Advance status

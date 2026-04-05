@@ -69,12 +69,13 @@ export function Team() {
     setLoadError(null)
 
     try {
-      const [profRes, logRes, taskRes, assignRes, platformRes] = await Promise.all([
+      const [profRes, logRes, taskRes, assignRes, platformRes, subtaskRes] = await Promise.all([
         supabase.from('profiles').select('*').order('full_name'),
         supabase.from('performance_logs').select('*'),
         supabase.from('tasks').select('id, status'),
         supabase.from('task_assignees').select('*'),
-        supabase.from('task_platforms').select('*')
+        supabase.from('task_platforms').select('*'),
+        supabase.from('subtasks').select('task_id, assigned_user_id, status, is_done')
       ])
 
       if (profRes.error) {
@@ -85,6 +86,7 @@ export function Team() {
         const safeTasks = taskRes.data ?? []
         const safeAssignees = assignRes.data ?? []
         const safePlatforms = platformRes.data ?? []
+        const safeSubtasks = subtaskRes.data ?? []
 
         const map = new Map<string, MemberStats>()
         profRes.data?.forEach(m => {
@@ -93,24 +95,34 @@ export function Team() {
           const delayed = uLogs.filter(l => l.event === 'task_delayed').length
           const reject = uLogs.filter(l => l.event === 'task_rejected').length
 
-          // Calculate counts based on current task statuses
+          // Calculate counts based on individual completions (Subtasks and Platforms)
+          const userSubtasks = safeSubtasks.filter(st => st.assigned_user_id === m.id)
+          const userPlatforms = safePlatforms.filter(tp => tp.assigned_user_id === m.id)
+          
+          // A subtask is done if status='completed' or is_done=true
+          const doneSubtasks = userSubtasks.filter(st => st.status === 'completed' || st.is_done).length
+          // A platform is done if status='posted'
+          const donePlatforms = userPlatforms.filter(tp => tp.status === 'posted' || tp.status === 'completed').length
+          
+          const doneCount = doneSubtasks + donePlatforms
+          
+          // Calculate active based on task_assignees (overall tasks) + active subtasks
           const userTaskIds = new Set([
             ...safeAssignees.filter(a => a.user_id === m.id).map(a => a.task_id),
-            ...safePlatforms.filter(tp => tp.assigned_user_id === m.id).map(tp => tp.task_id)
+            ...userSubtasks.map(st => st.task_id),
+            ...userPlatforms.map(tp => tp.task_id)
           ])
-
           const userTasks = safeTasks.filter(t => userTaskIds.has(t.id))
           
-          const doneCount = userTasks.filter(t => t.status === 'completed' || t.status === 'approved').length
           const activeCount = userTasks.filter(t => 
-            t.status === 'assigned' || t.status === 'in_progress' || t.status === 'review'
+            t.status === 'in_progress' || t.status === 'review' || t.status === 'scheduled' || t.status === 'pending'
           ).length
           const pendingCount = userTasks.filter(t => t.status === 'pending').length
 
-          // Maintain performance score logic using legacy logs for historical accuracy
+          // Performance logic (Historical)
           const total = legacyDone + delayed + reject
           const base = total > 0 ? (legacyDone / total) * 100 : 0
-          const performance = total === 0 ? 0 : Math.min(100, Math.round(base + (legacyDone * 2)))
+          const performance = total === 0 ? 0 : Math.min(100, Math.round(base + (doneCount * 2)))
 
           map.set(m.id, { 
             done: doneCount, 
@@ -162,7 +174,7 @@ export function Team() {
       setFullName(''); setEmail(''); setPassword('');
       await load()
       setOpen(false)
-      setBanner('Employee onboarded successfully.')
+      setBanner('Team member added successfully.')
     } finally { setSubmitting(false) }
   }
 
@@ -179,9 +191,9 @@ export function Team() {
       <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="space-y-4">
           <div>
-            <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text)] lg:text-5xl">Performance Hub</h1>
+            <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text)] lg:text-5xl">Team</h1>
             <p className="mt-2 text-[var(--color-text-muted)] text-lg font-medium opacity-80">
-              Orchestrating talent across core marketing and design functions
+              Manage your marketing and design team members
             </p>
           </div>
         </div>
@@ -287,13 +299,13 @@ export function Team() {
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-surface-2)] ring-1 ring-[var(--color-border)] transition-all group-hover:scale-110 group-hover:ring-[var(--color-accent)]/50">
               <UserPlus className="h-6 w-6 text-[var(--color-text-muted)] group-hover:text-[var(--color-accent)]" />
             </div>
-            <h3 className="mt-4 text-lg font-bold text-[var(--color-text)]">Onboard Member</h3>
-            <p className="mt-1 text-sm text-[var(--color-text-muted)] text-center max-w-[200px]">Expand your marketing team and track performance</p>
+            <h3 className="mt-4 text-lg font-bold text-[var(--color-text)]">Add Member</h3>
+            <p className="mt-1 text-sm text-[var(--color-text-muted)] text-center max-w-[200px]">Add a new team member</p>
           </button>
         )}
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Onboard New Talent" wide>
+      <Modal open={open} onClose={() => setOpen(false)} title="Add New Member" wide>
         <form onSubmit={handleAddEmployee} className="grid gap-6 py-4">
           {formError && (
             <div className="flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-500 font-medium">
@@ -359,7 +371,7 @@ export function Team() {
               className="flex-1 h-12 rounded-xl bg-[var(--color-accent)] font-bold text-white shadow-xl shadow-[var(--color-accent)]/20"
               disabled={submitting}
             >
-              {submitting ? 'Initializing Account...' : 'Confirm Recruitment'}
+              {submitting ? 'Adding...' : 'Add Member'}
             </Button>
             <Button
               type="button"

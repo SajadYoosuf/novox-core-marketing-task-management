@@ -124,7 +124,7 @@ export function TalentTasksDrawer({ userId, onClose, onTaskClick }: TalentTasksD
                 <div className="h-16 w-16 mx-auto rounded-3xl bg-white/5 flex items-center justify-center border border-white/5">
                   <Briefcase className="h-8 w-8 text-[#4F5B76]/40" />
                 </div>
-                <p className="text-xs font-bold text-[#4F5B76] italic">No production units detected in this talent's pipeline.</p>
+                <p className="text-xs font-bold text-[#4F5B76] italic">No tasks found for this team member.</p>
               </div>
             ) : (
               <div className="space-y-4">

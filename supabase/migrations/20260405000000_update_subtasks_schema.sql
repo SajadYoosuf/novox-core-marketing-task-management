@@ -1,8 +1,5 @@
--- Update subtasks table to support Kanban-style tracking
--- Add status and assignee columns to public.subtasks
-
-ALTER TABLE public.subtasks
-ADD COLUMN IF NOT EXISTS status public.task_status NOT NULL DEFAULT 'pending';
+-- Update subtasks table to support assignees and platform mapping
+-- Add columns to public.subtasks
 
 ALTER TABLE public.subtasks
 ADD COLUMN IF NOT EXISTS assigned_user_id uuid REFERENCES public.profiles (id) ON DELETE SET NULL;
@@ -10,11 +7,7 @@ ADD COLUMN IF NOT EXISTS assigned_user_id uuid REFERENCES public.profiles (id) O
 ALTER TABLE public.subtasks
 ADD COLUMN IF NOT EXISTS client_platform_id uuid REFERENCES public.client_platforms (id) ON DELETE SET NULL;
 
--- Migrate existing is_done values to status
-UPDATE public.subtasks SET status = 'completed' WHERE is_done = true;
-UPDATE public.subtasks SET status = 'in_progress' WHERE is_done = false AND task_id IN (SELECT id FROM public.tasks WHERE status = 'in_progress');
-
--- Ensure RLS is updated
+-- Ensure RLS is updated (though it was already using 'true')
 DROP POLICY IF EXISTS st_select ON public.subtasks;
 CREATE POLICY st_select ON public.subtasks FOR SELECT TO authenticated USING (true);
 

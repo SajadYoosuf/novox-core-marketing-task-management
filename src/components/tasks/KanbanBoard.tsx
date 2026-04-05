@@ -27,7 +27,6 @@ function Column({
   
   const statusColor = 
     status === 'pending' ? 'bg-slate-500' :
-    status === 'assigned' ? 'bg-blue-500' :
     status === 'in_progress' ? 'bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.4)]' :
     status === 'review' ? 'bg-purple-500' :
     status === 'approved' ? 'bg-emerald-500' :
