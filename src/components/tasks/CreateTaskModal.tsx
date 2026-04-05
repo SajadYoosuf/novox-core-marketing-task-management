@@ -88,7 +88,7 @@ export function CreateTaskModal({
           .eq('is_active', true)
         const activePlatforms = (data as ClientPlatform[]) ?? []
         setPlatforms(activePlatforms)
-        if (activePlatforms.length > 0) setCurrentPlatformIds(activePlatforms[0].id)
+        if (activePlatforms.length > 0) setCurrentPlatformIds([activePlatforms[0].id])
       } finally {
         setPlatformLoading(false)
       }
@@ -443,7 +443,6 @@ export function CreateTaskModal({
           {/* Subtask Units */}
           <div className="space-y-3">
             {subtaskDrafts.map(d => {
-              const platform = platforms.find(p => p.id === d.platformId)
               const assignee = profiles.find(p => p.id === d.assigneeId)
               return (
                 <div key={d.id} className="group relative flex items-center justify-between rounded-2xl border border-white/5 bg-[#161B26]/30 p-5 pl-7 hover:border-white/10 transition-all">

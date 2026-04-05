@@ -33,7 +33,7 @@ export function Team() {
 
   // Search & Filter
   const [search, setSearch] = useState('')
-  const [activeTab, setActiveTab] = useState<string>('all')
+  const [activeTab] = useState<string>('all')
 
   // Modal & Form
   const [open, setOpen] = useState(false)

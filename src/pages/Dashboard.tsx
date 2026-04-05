@@ -7,7 +7,6 @@ import { performanceScore } from '@/lib/constants'
 import {
   Clock,
   FileCheck,
-  AlertCircle,
   Camera,
   Briefcase,
   Globe,
