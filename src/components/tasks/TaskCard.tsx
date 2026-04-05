@@ -49,9 +49,6 @@ export function TaskCard({ task, onClick, onTalentClick }: TaskCardProps) {
   const completedSubtasks = task.subtasks?.filter(s => s.is_done).length || 0
   const progressPercent = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0
 
-  // Get primary platform
-  const primaryPlatform = task.task_platforms?.[0]?.client_platforms?.platform || 
-                          task.subtasks?.find(s => s.client_platforms?.platform)?.client_platforms?.platform
 
   return (
     <div 
@@ -110,13 +107,21 @@ export function TaskCard({ task, onClick, onTalentClick }: TaskCardProps) {
           </div>
         )}
 
-        {/* Platform Badge */}
-        {primaryPlatform && (
-          <div className="mt-5 inline-flex items-center gap-2 rounded-xl bg-white/[0.03] border border-white/5 px-3 py-1.5 transition-all group-hover:border-white/10 group-hover:bg-white/[0.05]">
-            <PlatformIcon platform={primaryPlatform} />
-            <span className="text-[9px] font-black uppercase tracking-widest text-white/50">
-              {primaryPlatform}
-            </span>
+        {/* Platform Badges */}
+        {task.task_platforms && task.task_platforms.length > 0 && (
+          <div className="mt-5 flex flex-wrap gap-1.5">
+            {task.task_platforms.map(tp => {
+              const platform = (tp.client_platforms as any)?.platform
+              if (!platform) return null
+              return (
+                <div key={tp.id} className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.03] border border-white/5 px-2 py-1 transition-all group-hover:border-white/10">
+                  <PlatformIcon platform={platform} />
+                  <span className="text-[8px] font-bold uppercase tracking-widest text-white/50">
+                    {platform}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         )}
 

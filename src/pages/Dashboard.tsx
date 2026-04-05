@@ -177,14 +177,7 @@ export function Dashboard() {
             Welcome back, {profile?.full_name?.split(' ')[0] || 'Member'}. Monitoring {stats.totalMembers} active team members.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" className="h-11 rounded-xl bg-white/5 border-white/10 hover:bg-white/10 transition-all font-bold">
-            Export Report
-          </Button>
-          <Button className="h-11 rounded-xl bg-[var(--color-accent)] px-8 font-bold text-white shadow-xl shadow-[var(--color-accent)]/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
-            Q3 Goals
-          </Button>
-        </div>
+
       </div>
 
       {/* Top Metrics Grid */}
@@ -228,16 +221,7 @@ export function Dashboard() {
           </div>
         </Card>
 
-        <Card className="group relative overflow-hidden border-rose-500/30 bg-rose-500/5 p-6 backdrop-blur-xl animation-pulse">
-          <div className="flex justify-between">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-rose-500 underline decoration-rose-500/30">Action Required</p>
-              <h3 className="mt-2 text-4xl font-black text-rose-500">{stats.overdue}</h3>
-            </div>
-            <AlertCircle className="h-6 w-6 text-rose-500" />
-          </div>
-          <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-rose-400">Immediate blockers detected</p>
-        </Card>
+
       </div>
 
       <div className="grid gap-6 lg:grid-cols-12">

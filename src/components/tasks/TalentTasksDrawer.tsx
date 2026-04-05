@@ -4,7 +4,6 @@ import {
   X, 
   Briefcase, 
   Calendar, 
-  CheckCircle2, 
   Clock,
   ExternalLink,
   Users
@@ -30,23 +29,29 @@ export function TalentTasksDrawer({ userId, onClose, onTaskClick }: TalentTasksD
     setLoading(true)
     void (async () => {
       try {
-        // Fetch talent profile
         const { data: p } = await supabase.from('profiles').select('*').eq('id', userId).single()
         setProfile(p as Profile)
 
-        // Fetch tasks assigned to this user (directly or via subtasks)
-        const { data: t } = await supabase
+        // Fetch all tasks + subtasks separately to avoid FK join issues
+        const { data: allTasks } = await supabase
           .from('tasks')
-          .select('*, clients(*), task_assignees(*), subtasks(*)')
-          .or(`creator_id.eq.${userId},task_assignees.user_id.eq.${userId},subtasks.assigned_user_id.eq.${userId}`)
+          .select('*, clients(*)')
           .order('updated_at', { ascending: false })
 
-        // Post-filter to ensure accuracy if 'or' was messy with joins
-        // PostgREST 11+ supports 'or' across joins, but filtering here is safer
-        const talentTasks = (t as TaskWithRelations[]) || []
-        const filtered = talentTasks.filter(task => 
+        const { data: allSubtasks } = await supabase
+          .from('subtasks')
+          .select('*')
+
+        // Filter to tasks where this user is the creator or assigned via subtasks
+        const assembled = (allTasks ?? []).map(t => ({
+          ...t,
+          subtasks: (allSubtasks ?? []).filter(s => s.task_id === t.id),
+          task_assignees: [],
+          task_platforms: [],
+        })) as TaskWithRelations[]
+
+        const filtered = assembled.filter(task =>
           task.created_by === userId ||
-          task.task_assignees?.some(a => a.user_id === userId) ||
           task.subtasks?.some(s => s.assigned_user_id === userId)
         )
 

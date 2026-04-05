@@ -174,7 +174,18 @@ export function CreateTaskModal({
             is_done: false,
           }))
         )
-        if (sErr) console.error('⚠️ Subtask Sync Warning:', sErr)
+        if (sErr) console.error('Subtask insert warning:', sErr)
+
+        // Also insert into task_assignees junction table
+        const uniqueAssigneeIds = Array.from(new Set(
+          subtaskDrafts.map(d => d.assigneeId).filter(Boolean)
+        ))
+        if (uniqueAssigneeIds.length > 0) {
+          const { error: aErr } = await supabase.from('task_assignees').insert(
+            uniqueAssigneeIds.map(uid => ({ task_id: taskId, user_id: uid }))
+          )
+          if (aErr) console.error('Assignee insert warning:', aErr)
+        }
       }
 
       console.log('🏁 Pipeline finalized. Synchronizing UI...')

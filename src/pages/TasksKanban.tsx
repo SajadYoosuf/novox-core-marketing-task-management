@@ -31,37 +31,41 @@ export function TasksKanban() {
     setLoading(true)
 
     try {
-      console.log('📡 Fetching tasks from Marketing Core...')
-      const { data: t, error: tErr } = await supabase
-        .from('tasks')
-        .select(`
-          *,
-          clients(*),
-          task_assignees(*, profiles(*)),
-          task_platforms(*, client_platforms(platform)),
-          subtasks(*, client_platforms(platform), profiles:assigned_user_id(*))
-        `)
-        .order('updated_at', { ascending: false })
+      const [taskRes, subtaskRes, assigneeRes, platformRes, cpRes, clientRes, profileRes] = await Promise.all([
+        supabase.from('tasks').select('*, clients(*)').order('updated_at', { ascending: false }),
+        supabase.from('subtasks').select('*').order('sort_order'),
+        supabase.from('task_assignees').select('*'),
+        supabase.from('task_platforms').select('*'),
+        supabase.from('client_platforms').select('*'),
+        supabase.from('clients').select('*').order('name'),
+        supabase.from('profiles').select('*').order('full_name'),
+      ])
 
-      if (tErr) {
-        console.error('❌ Task Fetch Error:', tErr)
-        const { data: simpleT } = await supabase.from('tasks').select('*, clients(*)').order('updated_at', { ascending: false })
-        setTasks((simpleT as TaskWithRelations[]) ?? [])
-      } else {
-        setTasks((t as TaskWithRelations[]) ?? [])
-      }
+      setClients((clientRes.data as Client[]) ?? [])
+      setProfiles((profileRes.data as Profile[]) ?? [])
 
-      const { data: c } = await supabase.from('clients').select('*').order('name')
-      setClients((c as Client[]) ?? [])
+      const cpMap = new Map((cpRes.data ?? []).map(cp => [cp.id, cp]))
+      const profMap = new Map((profileRes.data ?? []).map(p => [p.id, p]))
 
-      const { data: p } = await supabase.from('profiles').select('*').order('full_name')
-      setProfiles((p as Profile[]) ?? [])
+      const assembled = (taskRes.data ?? []).map(t => ({
+        ...t,
+        subtasks: (subtaskRes.data ?? []).filter(s => s.task_id === t.id),
+        task_assignees: (assigneeRes.data ?? [])
+          .filter(a => a.task_id === t.id)
+          .map(a => ({ ...a, profiles: profMap.get(a.user_id) ?? null })),
+        task_platforms: (platformRes.data ?? [])
+          .filter(tp => tp.task_id === t.id)
+          .map(tp => ({ ...tp, client_platforms: cpMap.get(tp.client_platform_id) ?? null })),
+      })) as TaskWithRelations[]
+
+      setTasks(assembled)
     } catch (err) {
-      console.error('⚠️ Unexpected Operational Error:', err)
+      console.error('Task load error:', err)
     } finally {
       setLoading(false)
     }
   }, [])
+
 
   useEffect(() => {
     void load()
