@@ -35,6 +35,10 @@ const PlatformIcon = ({ platform }: { platform?: string }) => {
   return <Globe className="h-3 w-3 text-[var(--color-text-muted)]" />
 }
 
+import { TaskDetailDrawer } from '@/components/tasks/TaskDetailDrawer'
+import { Modal } from '@/components/ui/Modal'
+import { Plus } from 'lucide-react'
+
 export function Calendar() {
   const [month, setMonth] = useState(() => new Date())
   const [tasks, setTasks] = useState<(TaskRow & { clients?: { name?: string } | null })[]>([])
@@ -42,6 +46,10 @@ export function Calendar() {
   const [filterClient, setFilterClient] = useState('')
   const [filterPlatform, setFilterPlatform] = useState('')
   const [taskPlatforms, setTaskPlatforms] = useState<TaskPlatformRow[]>([])
+  
+  // Interaction State
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null)
+  const [viewingTaskId, setViewingTaskId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!supabaseConfigured) return
@@ -70,13 +78,11 @@ export function Calendar() {
     return list
   }, [tasks, filterClient, filterPlatform, taskPlatforms])
 
-  // Full 42-day grid calculation
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(month))
     const end = endOfWeek(endOfMonth(month))
     const days = eachDayOfInterval({ start, end })
 
-    // Ensure we always have 42 days for a consistent 7x6 grid
     if (days.length < 42) {
       const lastDay = days[days.length - 1]
       const extra = eachDayOfInterval({
@@ -96,6 +102,8 @@ export function Calendar() {
     })
   }
 
+  const selectedDayTasks = selectedDay ? tasksOnDay(selectedDay) : []
+
   const handlePrevMonth = () => setMonth(m => subMonths(m, 1))
   const handleNextMonth = () => setMonth(m => addMonths(m, 1))
   const handleToday = () => setMonth(new Date())
@@ -104,31 +112,22 @@ export function Calendar() {
     <div className="mx-auto w-full max-w-[1400px] space-y-8 animate-in fade-in duration-700">
       {/* Header Section */}
       <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-        <div>
+        <div className="space-y-1">
           <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text)] lg:text-5xl">Marketing Calendar</h1>
-          <p className="mt-3 text-lg font-medium text-[var(--color-text-muted)] opacity-80 leading-relaxed capitalize">
-            {format(month, 'MMMM yyyy')} — Task Scheduling
+          <p className="text-lg font-medium text-[var(--color-text-muted)] opacity-80 leading-relaxed capitalize">
+            {format(month, 'MMMM yyyy')} — Global Workflow View
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 rounded-xl bg-[var(--color-surface-2)]/50 p-1 border border-[var(--color-border)]">
-            <button
-              onClick={handlePrevMonth}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:bg-white/5 hover:text-[var(--color-text)] transition-all"
-            >
+          <div className="flex items-center gap-1 rounded-2xl bg-white/5 p-1 border border-white/5 backdrop-blur-xl">
+            <button onClick={handlePrevMonth} className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--color-text-muted)] hover:bg-white/5 hover:text-white transition-all transform hover:scale-105">
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <button
-              onClick={handleToday}
-              className="px-4 text-xs font-black uppercase tracking-widest text-[var(--color-text)] hover:text-[var(--color-accent)] transition-colors"
-            >
+            <button onClick={handleToday} className="px-6 text-[10px] font-black uppercase tracking-[0.2em] text-white hover:text-[var(--color-accent)] transition-colors">
               Today
             </button>
-            <button
-              onClick={handleNextMonth}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:bg-white/5 hover:text-[var(--color-text)] transition-all"
-            >
+            <button onClick={handleNextMonth} className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--color-text-muted)] hover:bg-white/5 hover:text-white transition-all transform hover:scale-105">
               <ChevronRight className="h-5 w-5" />
             </button>
           </div>
@@ -136,17 +135,17 @@ export function Calendar() {
       </div>
 
       {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-4">
         <div className="relative group">
           <Filter className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)]" />
           <select
-            className="h-11 w-48 appearance-none rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/50 pl-11 pr-10 text-sm font-bold text-[var(--color-text)] ring-[var(--color-accent)]/20 transition-all focus:bg-[var(--color-surface)] focus:ring-4 focus:outline-none"
+            className="h-12 w-52 appearance-none rounded-2xl border border-white/5 bg-white/5 pl-11 pr-10 text-xs font-black uppercase tracking-widest text-white ring-[var(--color-accent)]/20 transition-all focus:bg-white/10 focus:ring-4 focus:outline-none backdrop-blur-xl"
             value={filterClient}
             onChange={(e) => setFilterClient(e.target.value)}
           >
-            <option value="">All Clients</option>
+            <option value="" className="bg-[var(--color-surface)]">All Clients</option>
             {clients.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+              <option key={c.id} value={c.id} className="bg-[var(--color-surface)]">{c.name}</option>
             ))}
           </select>
         </div>
@@ -154,32 +153,30 @@ export function Calendar() {
         <div className="relative group">
           <LayoutGrid className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)]" />
           <select
-            className="h-11 w-48 appearance-none rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/50 pl-11 pr-10 text-sm font-bold text-[var(--color-text)] ring-[var(--color-accent)]/20 transition-all focus:bg-[var(--color-surface)] focus:ring-4 focus:outline-none"
+            className="h-12 w-52 appearance-none rounded-2xl border border-white/5 bg-white/5 pl-11 pr-10 text-xs font-black uppercase tracking-widest text-white ring-[var(--color-accent)]/20 transition-all focus:bg-white/10 focus:ring-4 focus:outline-none backdrop-blur-xl"
             value={filterPlatform}
             onChange={(e) => setFilterPlatform(e.target.value)}
           >
-            <option value="">All Platforms</option>
-            <option value="instagram">Instagram</option>
-            <option value="facebook">Facebook</option>
-            <option value="linkedin">LinkedIn</option>
-            <option value="website">Website</option>
+            <option value="" className="bg-[var(--color-surface)]">All Platforms</option>
+            <option value="instagram" className="bg-[var(--color-surface)]">Instagram</option>
+            <option value="facebook" className="bg-[var(--color-surface)]">Facebook</option>
+            <option value="linkedin" className="bg-[var(--color-surface)]">LinkedIn</option>
+            <option value="website" className="bg-[var(--color-surface)]">Website</option>
           </select>
         </div>
       </div>
 
       {/* Calendar Grid */}
-      <div className="rounded-[2.5rem] border border-[var(--color-border)] bg-[var(--color-surface-2)]/20 p-4 backdrop-blur-3xl shadow-2xl">
-        {/* Weekday Headers */}
-        <div className="mb-4 grid grid-cols-7 gap-4">
+      <div className="rounded-[3rem] border border-white/5 bg-white/[0.02] p-8 backdrop-blur-3xl shadow-2xl overflow-hidden relative">
+        <div className="mb-6 grid grid-cols-7 gap-6">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-            <div key={d} className="text-center text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-text-muted)] opacity-60">
+            <div key={d} className="text-center text-[11px] font-black uppercase tracking-[0.3em] text-[var(--color-text-muted)] opacity-50">
               {d}
             </div>
           ))}
         </div>
 
-        {/* Days Grid */}
-        <div className="grid grid-cols-7 gap-4">
+        <div className="grid grid-cols-7 gap-6">
           {calendarDays.map((d) => {
             const inMonth = isSameMonth(d, month)
             const activeToday = isToday(d)
@@ -188,30 +185,28 @@ export function Calendar() {
             return (
               <div
                 key={d.toISOString()}
-                className={`group relative flex min-h-[140px] flex-col rounded-[2rem] border transition-all duration-300 p-4 ${!inMonth ? 'bg-transparent border-transparent opacity-20' :
-                    activeToday ? 'bg-[var(--color-accent)]/5 border-[var(--color-accent)]/40 shadow-[0_0_20px_rgba(var(--color-accent-rgb),0.1)]' :
-                      'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10'
+                onClick={() => setSelectedDay(d)}
+                className={`group relative flex min-h-[160px] flex-col rounded-[2.5rem] border transition-all duration-500 p-5 cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${!inMonth ? 'bg-transparent border-transparent opacity-10 cursor-default' :
+                    activeToday ? 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/80 shadow-[0_20px_50px_rgba(var(--color-accent-rgb),0.1)]' :
+                      'bg-white/[0.04] border-white/5 hover:bg-white/10 hover:border-white/20 hover:shadow-2xl'
                   }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className={`text-sm font-black ${activeToday ? 'text-[var(--color-accent)]' : 'text-[var(--color-text)] opacity-80'}`}>
+                  <span className={`text-base font-black ${activeToday ? 'text-white' : 'text-white/60'}`}>
                     {format(d, 'd')}
                   </span>
                   {activeToday && (
-                    <div className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] shadow-[0_0_8px_rgba(var(--color-accent-rgb),0.8)]" />
+                    <div className="h-2 w-2 rounded-full bg-[var(--color-accent)] shadow-[0_0_15px_rgba(var(--color-accent-rgb),0.8)]" />
                   )}
                 </div>
 
-                <div className="mt-3 space-y-2">
-                  {dayTasks.map((t) => {
+                <div className="mt-4 space-y-2">
+                  {dayTasks.slice(0, 3).map((t) => {
                     const platform = taskPlatforms.find(tp => tp.task_id === t.id)?.client_platforms as any
                     return (
-                      <div
-                        key={t.id}
-                        className="group/item flex items-center gap-2 rounded-xl bg-black/20 p-2 transition-all hover:bg-[var(--color-accent)]/20"
-                      >
+                      <div key={t.id} className="flex h-7 items-center gap-2 rounded-xl bg-white/5 px-3 transition-opacity">
                         <PlatformIcon platform={platform?.platform} />
-                        <span className="truncate text-[10px] font-bold text-[var(--color-text)] opacity-90 group-hover/item:text-[var(--color-accent)]">
+                        <span className="truncate text-[10px] font-black uppercase tracking-tighter text-white/80">
                           {t.title}
                         </span>
                       </div>
@@ -219,10 +214,10 @@ export function Calendar() {
                   })}
                 </div>
 
-                {/* Visual Accent for days with many tasks */}
                 {dayTasks.length > 3 && (
-                  <div className="mt-auto pt-2 text-[9px] font-black uppercase tracking-widest text-[var(--color-accent)]">
-                    +{dayTasks.length - 3} More
+                  <div className="mt-auto pt-3 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-[var(--color-accent)]">
+                    <div className="h-1 w-1 rounded-full bg-[var(--color-accent)]" />
+                    +{dayTasks.length - 3} Units
                   </div>
                 )}
               </div>
@@ -230,6 +225,65 @@ export function Calendar() {
           })}
         </div>
       </div>
+
+      {/* Day Overview Modal */}
+      <Modal 
+        open={!!selectedDay} 
+        onClose={() => setSelectedDay(null)}
+        title={selectedDay ? format(selectedDay, 'EEEE, MMMM d') : ''}
+      >
+        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2 scrollbar-hide py-2">
+          {selectedDayTasks.length > 0 ? (
+            <div className="grid gap-4">
+              {selectedDayTasks.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setViewingTaskId(t.id)
+                    setSelectedDay(null)
+                  }}
+                  className="flex items-center justify-between rounded-[2rem] border border-white/5 bg-white/5 p-6 text-left transition-all hover:bg-white/10 hover:border-[var(--color-accent)]/40 hover:scale-[1.01] active:scale-[0.99] group"
+                >
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--color-accent)]">
+                      {t.clients?.name || 'SYNCING...'}
+                    </p>
+                    <h3 className="text-xl font-black text-white group-hover:text-[var(--color-accent)] transition-colors line-clamp-1">
+                      {t.title}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`rounded-xl px-4 py-1.5 text-[10px] font-black uppercase tracking-widest border border-white/10 ${
+                      t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 
+                      t.status === 'in_progress' ? 'bg-blue-500/10 text-blue-400' : 'bg-white/5 text-white/40'
+                    }`}>
+                      {t.status}
+                    </span>
+                    <Plus className="h-5 w-5 text-white/20 group-hover:text-white transition-colors" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+              <div className="h-20 w-20 rounded-[2.5rem] bg-white/5 flex items-center justify-center">
+                <LayoutGrid className="h-8 w-8 text-white/10" />
+              </div>
+              <div>
+                <p className="text-sm font-black uppercase tracking-widest text-white/60">No tasks scheduled</p>
+                <p className="text-xs text-white/30 mt-1">Select another day or add a new task</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Task Detail Integration */}
+      <TaskDetailDrawer 
+        taskId={viewingTaskId}
+        onClose={() => setViewingTaskId(null)}
+        onUpdate={load}
+      />
     </div>
   )
 }
