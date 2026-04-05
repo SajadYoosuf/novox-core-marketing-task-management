@@ -16,7 +16,7 @@ export const PLATFORM_ICON: Record<string, LucideIcon> = {
   x: Share2,
 }
 
-export const PLATFORM_LABEL: Record<string, string> = {
+export const PLATFORM_LABELS: Record<string, string> = {
   instagram: 'Instagram',
   facebook: 'Facebook',
   linkedin: 'LinkedIn',
@@ -29,6 +29,7 @@ export const PLATFORM_LABEL: Record<string, string> = {
   youtube: 'YouTube',
   x: 'X (Twitter)',
 }
+export const PLATFORM_LABEL = PLATFORM_LABELS
 
 export const TASK_CONTENT_TYPES = [
   'post',
@@ -55,7 +56,7 @@ export const TASK_CONTENT_TYPE_LABELS: Record<TaskContentType, string> = {
   website_content: 'Website Content',
 }
 
-export const STATUS_LABEL: Record<TaskStatus, string> = {
+export const STATUS_LABELS: Record<TaskStatus, string> = {
   pending: 'Pending',
   assigned: 'Assigned',
   in_progress: 'In Progress',
@@ -66,6 +67,7 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
   completed: 'Completed',
   rejected: 'Rejected',
 }
+export const STATUS_LABEL = STATUS_LABELS
 
 export const STATUS_COLORS: Record<TaskStatus, string> = {
   pending: 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-800',
@@ -79,12 +81,13 @@ export const STATUS_COLORS: Record<TaskStatus, string> = {
   rejected: 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800',
 }
 
-export const PRIORITY_LABEL: Record<string, string> = {
+export const PRIORITY_LABELS: Record<string, string> = {
   low: 'Low',
   medium: 'Medium',
   high: 'High',
   urgent: 'Urgent',
 }
+export const PRIORITY_LABEL = PRIORITY_LABELS
 
 export const STATUS_ORDER: TaskStatus[] = [
   'pending',
@@ -106,27 +109,18 @@ export const ALL_USER_ROLES: UserRole[] = [
   'marketing_executive',
 ]
 
-/**
- * Roles that a Marketing Head can assign to new members
- */
 export const HEAD_ASSIGNABLE_ROLES: UserRole[] = ['marketing_executive', 'designer']
-
-/**
- * Roles that a Designer Head can assign to new members
- */
 export const DESIGNER_HEAD_ASSIGNABLE_ROLES: UserRole[] = ['designer']
 
-export const ROLE_LABEL: Record<UserRole, string> = {
+export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Admin',
   marketing_head: 'Marketing Head',
   designer_head: 'Designer Head',
   designer: 'Designer',
   marketing_executive: 'Marketing Executive',
 }
+export const ROLE_LABEL = ROLE_LABELS
 
-/**
- * Higher number = more authority
- */
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
   admin: 100,
   marketing_head: 80,
@@ -140,8 +134,6 @@ export function canAssignRole(myRole: UserRole, targetRole: UserRole): boolean {
 }
 
 export function canEditProfileRole(myRole: UserRole, profileRole: UserRole): boolean {
-  // Can only edit roles of people equal or below you
-  // But usually, only admin/heads can edit anyone.
   if (ROLE_HIERARCHY[myRole] < 70) return false
   return ROLE_HIERARCHY[myRole] >= ROLE_HIERARCHY[profileRole]
 }

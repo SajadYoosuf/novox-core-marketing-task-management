@@ -7,7 +7,7 @@ import {
   ALL_USER_ROLES,
   HEAD_ASSIGNABLE_ROLES,
   DESIGNER_HEAD_ASSIGNABLE_ROLES,
-  ROLE_LABEL,
+  ROLE_LABELS,
   canAssignRole,
 } from '@/lib/constants'
 import { Button } from '@/components/ui/Button'
@@ -248,7 +248,7 @@ export function Team() {
                   <div>
                     <h3 className="text-lg font-bold text-[var(--color-text)]">{m.full_name}</h3>
                     <p className="text-xs font-black uppercase tracking-widest text-[var(--color-accent)] opacity-80">
-                      {ROLE_LABEL[m.role] || m.role}
+                      {ROLE_LABELS[(m.role || 'marketing_executive') as UserRole]}
                     </p>
                   </div>
                 </div>
@@ -359,7 +359,7 @@ export function Team() {
                 onChange={e => setNewRole(e.target.value as UserRole)}
               >
                 {rolesForNewEmployee.map(r => (
-                  <option key={r} value={r}>{ROLE_LABEL[r as UserRole] ?? r}</option>
+                  <option key={r} value={r}>{ROLE_LABELS[r as UserRole] ?? r}</option>
                 ))}
               </select>
             </div>
