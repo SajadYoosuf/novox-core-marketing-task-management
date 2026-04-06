@@ -14,6 +14,7 @@ import type {
   Subtask,
   TaskPlatformRow,
   TaskRow,
+  TaskWithRelations,
 } from '@/types/db'
 import { nextPlatformStatus, previousPlatformStatus } from '@/lib/taskWorkflow'
 import { format } from 'date-fns'
@@ -27,13 +28,21 @@ export function TaskDetail() {
 
   const [task, setTask] = useState<TaskRow | null>(null)
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
-  const [platforms, setPlatforms] = useState<TaskPlatformRow[]>([])
+  const [taskPlatforms, setTaskPlatforms] = useState<TaskPlatformRow[]>([])
+  const [clientPlatforms, setClientPlatforms] = useState<any[]>([])
 
   const [comments, setComments] = useState<Comment[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [commentBody, setCommentBody] = useState('')
   const [rejectOpen, setRejectOpen] = useState<string | null>(null)
   const [rejectText, setRejectText] = useState('')
+  
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState('')
+  const [selectedPlatformIds, setSelectedPlatformIds] = useState<string[]>([])
+  const [platformMenuOpen, setPlatformMenuOpen] = useState(false)
+  const [editingSubtaskId, setEditingSubtaskId] = useState<string | null>(null)
+  const [editingSubtaskTitle, setEditingSubtaskTitle] = useState('')
 
   const load = useCallback(async () => {
     if (!supabaseConfigured || !id) return
@@ -42,7 +51,7 @@ export function TaskDetail() {
     const { data: st } = await supabase.from('subtasks').select('*').eq('task_id', id).order('sort_order')
     setSubtasks((st as Subtask[]) ?? [])
     const { data: tp } = await supabase.from('task_platforms').select('*, client_platforms(platform)').eq('task_id', id)
-    setPlatforms((tp as TaskPlatformRow[]) ?? [])
+    setTaskPlatforms((tp as TaskPlatformRow[]) ?? [])
     const { data: cm } = await supabase
       .from('comments')
       .select('*, profiles(full_name)')
@@ -51,6 +60,10 @@ export function TaskDetail() {
     setComments((cm as Comment[]) ?? [])
     const { data: pr } = await supabase.from('profiles').select('*').order('full_name')
     setProfiles((pr as Profile[]) ?? [])
+    if (t) {
+      const { data: cPlats } = await supabase.from('client_platforms').select('*').eq('client_id', (t as TaskRow).client_id).eq('is_active', true)
+      setClientPlatforms(cPlats ?? [])
+    }
   }, [id])
 
   useEffect(() => {
@@ -61,6 +74,66 @@ export function TaskDetail() {
     if (!supabaseConfigured) return
     await supabase.from('subtasks').update({ is_done: !st.is_done }).eq('id', st.id)
     await load()
+  }
+
+  async function addSubtask() {
+    if (!supabaseConfigured || !id || !newSubtaskTitle.trim()) return
+
+    const assignee = profiles.find(p => p.id === newSubtaskAssignee)
+    const isDesigner = assignee?.role === 'designer' || assignee?.role === 'designer_head'
+
+    if (isDesigner || selectedPlatformIds.length === 0) {
+      await supabase.from('subtasks').insert({
+        task_id: id,
+        title: newSubtaskTitle.trim(),
+        assigned_user_id: newSubtaskAssignee || null,
+        sort_order: subtasks.length,
+        is_done: false
+      })
+    } else {
+      // Create multiple platform assignments
+      const platformRows = selectedPlatformIds.map(pid => ({
+        task_id: id,
+        client_platform_id: pid,
+        assigned_user_id: newSubtaskAssignee || null,
+        status: 'pending' as any
+      }))
+      await supabase.from('task_platforms').insert(platformRows)
+      
+      // Also create parent subtask
+      await supabase.from('subtasks').insert({
+        task_id: id,
+        title: newSubtaskTitle.trim(),
+        assigned_user_id: newSubtaskAssignee || null,
+        sort_order: subtasks.length,
+        is_done: false
+      })
+    }
+
+    setNewSubtaskTitle('')
+    setNewSubtaskAssignee('')
+    setSelectedPlatformIds([])
+    await load()
+  }
+
+  async function updateSubtask(id: string, updates: Partial<Subtask>) {
+    if (!supabaseConfigured) return
+    await supabase.from('subtasks').update(updates).eq('id', id)
+    await load()
+  }
+
+  async function deleteSubtask(id: string) {
+    if (!supabaseConfigured) return
+    if (!confirm('Are you sure you want to delete this subtask?')) return
+    await supabase.from('subtasks').delete().eq('id', id)
+    await load()
+  }
+
+  async function saveSubtaskEdit() {
+    if (!editingSubtaskId) return
+    await updateSubtask(editingSubtaskId, { title: editingSubtaskTitle.trim() })
+    setEditingSubtaskId(null)
+    setEditingSubtaskTitle('')
   }
 
   const allSubtasksDone = subtasks.length > 0 && subtasks.every((s) => s.is_done)
@@ -121,7 +194,7 @@ export function TaskDetail() {
       alert('Complete all subtasks before marking the task completed.')
       return
     }
-    const pending = platforms.filter((p) => p.status !== 'completed' && p.status !== 'approved')
+    const pending = taskPlatforms.filter((p: TaskPlatformRow) => p.status !== 'completed' && p.status !== 'approved')
     if (pending.length) {
       const ok = confirm('Some platform rows are not approved/completed. Complete anyway?')
       if (!ok) return
@@ -195,32 +268,183 @@ export function TaskDetail() {
       </div>
 
       <Card>
-        <h2 className="mb-3 text-sm font-semibold text-[var(--color-text)]">Subtasks</h2>
-        {!subtasks.length ? <p className="text-sm text-[var(--color-text-muted)]">No subtasks.</p> : null}
-        <ul className="space-y-2">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-[var(--color-text)]">Subtasks</h2>
+          <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-widest">
+            {subtasks.filter(s => s.is_done).length} / {subtasks.length} DONE
+          </span>
+        </div>
+        
+        <div className="space-y-3">
           {subtasks.map((s) => (
-            <li key={s.id} className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={s.is_done} onChange={() => void toggleSubtask(s)} />
-              <span className={s.is_done ? 'text-[var(--color-text-muted)] line-through' : ''}>{s.title}</span>
-            </li>
+            <div key={s.id} className="group relative flex flex-col gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/30 p-3 transition-all hover:border-[var(--color-accent)]/30">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
+                  checked={s.is_done}
+                  onChange={() => void toggleSubtask(s)}
+                />
+                
+                {editingSubtaskId === s.id ? (
+                  <div className="flex flex-1 items-center gap-2">
+                    <input
+                      type="text"
+                      autoFocus
+                      className="flex-1 bg-transparent text-sm font-medium focus:outline-none"
+                      value={editingSubtaskTitle}
+                      onChange={(e) => setEditingSubtaskTitle(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && saveSubtaskEdit()}
+                      onBlur={() => saveSubtaskEdit()}
+                    />
+                  </div>
+                ) : (
+                  <span
+                    className={`flex-1 text-sm font-medium transition-all ${s.is_done ? 'text-[var(--color-text-muted)] line-through opacity-50' : 'text-[var(--color-text)]'}`}
+                    onClick={() => {
+                      setEditingSubtaskId(s.id)
+                      setEditingSubtaskTitle(s.title)
+                    }}
+                  >
+                    {s.title}
+                  </span>
+                )}
+
+                <button
+                  onClick={() => void deleteSubtask(s.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:bg-red-500/10 rounded transition-all"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+              </div>
+
+              <div className="ml-7 flex items-center gap-4">
+                <select
+                  className="bg-transparent text-[11px] font-bold text-[var(--color-text-muted)] focus:outline-none cursor-pointer hover:text-[var(--color-accent)] transition-colors"
+                  value={s.assigned_user_id || ''}
+                  onChange={(e) => void updateSubtask(s.id, { assigned_user_id: e.target.value || null })}
+                >
+                  <option value="">Assign Member</option>
+                  {profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.full_name}
+                    </option>
+                  ))}
+                </select>
+
+                {(profiles.find(p => p.id === s.assigned_user_id)?.role !== 'designer') && (
+                  <select
+                    className="bg-transparent text-[10px] font-black uppercase text-[#EE4667] focus:outline-none border-l border-white/5 pl-2"
+                    value={s.client_platform_id || ''}
+                    onChange={(e) => void updateSubtask(s.id, { client_platform_id: e.target.value || null })}
+                  >
+                    <option value="">No Platform</option>
+                    {clientPlatforms.map((p) => (
+                      <option key={p.id} value={p.id}>{PLATFORM_LABEL[p.platform as keyof typeof PLATFORM_LABEL] || p.platform}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
           ))}
-        </ul>
+
+          {/* New Subtask Row */}
+          <div className="mt-4 flex flex-col gap-2 rounded-xl border border-dashed border-[var(--color-border)] p-3">
+            <div className="flex items-center gap-3">
+              <div className="h-4 w-4 flex items-center justify-center text-[var(--color-text-muted)]">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              </div>
+              <input
+                type="text"
+                placeholder="Add new subtask..."
+                className="flex-1 bg-transparent text-sm font-medium focus:outline-none placeholder:opacity-50"
+                value={newSubtaskTitle}
+                onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addSubtask()}
+              />
+              {newSubtaskTitle.trim() && (
+                <button
+                  onClick={() => void addSubtask()}
+                  className="rounded bg-[var(--color-accent)] px-2 py-1 text-[10px] font-bold text-white transition-opacity hover:opacity-90"
+                >
+                  ADD
+                </button>
+              )}
+            </div>
+            
+            <div className="ml-7 flex items-center gap-4">
+              <select
+                className="bg-transparent text-[11px] font-bold text-[var(--color-text-muted)] focus:outline-none cursor-pointer hover:text-[var(--color-accent)] transition-colors"
+                value={newSubtaskAssignee}
+                onChange={(e) => setNewSubtaskAssignee(e.target.value)}
+              >
+                <option value="">Assign Member</option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.full_name}
+                  </option>
+                ))}
+              </select>
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPlatformMenuOpen(!platformMenuOpen)}
+                  disabled={profiles.find(p => p.id === newSubtaskAssignee)?.role === 'designer'}
+                  className={`flex items-center gap-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] px-3 py-1.5 text-[10px] font-black uppercase text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-all cursor-pointer 
+                    ${(profiles.find(p => p.id === newSubtaskAssignee)?.role?.includes('designer')) ? 'opacity-30 grayscale cursor-not-allowed' : ''}
+                  `}
+                >
+                  <span>
+                    {selectedPlatformIds.length === 0 ? 'Select Platforms' : `${selectedPlatformIds.length} Chosen`}
+                  </span>
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                
+                {platformMenuOpen && (
+                  <div className="absolute top-full left-0 mt-2 z-[50] w-48 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-2xl animate-in fade-in slide-in-from-top-2">
+                    {clientPlatforms.map(p => {
+                      const isSelected = selectedPlatformIds.includes(p.id)
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setSelectedPlatformIds(prev => 
+                            prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                          )}
+                          className={`flex w-full items-center justify-between px-3 py-2 rounded-lg text-[9px] font-black uppercase transition-all cursor-pointer text-left
+                            ${isSelected ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]'}`}
+                        >
+                          <span>{PLATFORM_LABEL[p.platform as keyof typeof PLATFORM_LABEL] || p.platform}</span>
+                          {isSelected && <div className="h-1 w-1 rounded-full bg-[var(--color-accent)]" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {!allSubtasksDone && subtasks.length > 0 ? (
-          <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">All subtasks must be done before completing the task.</p>
+          <p className="mt-4 text-xs font-semibold text-amber-500/80 uppercase tracking-widest">
+            Complete all subtasks before completion
+          </p>
         ) : null}
       </Card>
 
       <Card>
         <h2 className="mb-3 text-sm font-semibold text-[var(--color-text)]">Platforms</h2>
         <div className="space-y-6">
-          {platforms.map((tp) => {
-            const pt = tp.client_platforms?.platform
+          {taskPlatforms.map((tp) => {
+            const pt = (tp.client_platforms as any)?.platform
             if (!pt) return null
-            const Icon = PLATFORM_ICON[pt]
+            const Icon = PLATFORM_ICON[pt as keyof typeof PLATFORM_ICON]
             return (
               <div key={tp.id} className="rounded-lg border border-[var(--color-border)] p-4">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <PlatformBadge label={PLATFORM_LABEL[pt]} icon={Icon} />
+                  <PlatformBadge label={PLATFORM_LABEL[pt as keyof typeof PLATFORM_LABEL]} icon={Icon} />
                   <StatusBadge status={tp.status} />
                 </div>
                 <div className="mb-3">
@@ -268,7 +492,7 @@ export function TaskDetail() {
               </div>
             )
           })}
-          {!platforms.length ? <p className="text-sm text-[var(--color-text-muted)]">No platforms on this task.</p> : null}
+          {!taskPlatforms.length ? <p className="text-sm text-[var(--color-text-muted)]">No platforms on this task.</p> : null}
         </div>
       </Card>
 

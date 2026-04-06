@@ -13,7 +13,7 @@ import {
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
 import { Input, TextArea } from '@/components/ui/Input'
-import type { TaskWithRelations, Subtask, Profile } from '@/types/db'
+import type { TaskWithRelations, Subtask, Profile, TaskRow } from '@/types/db'
 import { format, parseISO } from 'date-fns'
 import { PLATFORM_ICON, PLATFORM_LABEL } from '@/lib/constants'
 
@@ -31,6 +31,11 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<Partial<TaskWithRelations>>({})
   const [expandedSubtask, setExpandedSubtask] = useState<string | null>(null)
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('')
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState('')
+  const [selectedPlatformIds, setSelectedPlatformIds] = useState<string[]>([])
+  const [platformMenuOpen, setPlatformMenuOpen] = useState(false)
+  const [platforms, setPlatforms] = useState<any[]>([])
 
   const loadTask = useCallback(async (tid: string) => {
     if (!supabaseConfigured) return
@@ -51,12 +56,13 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
         supabase.from('subtasks').select('*').eq('task_id', tid).order('sort_order'),
         supabase.from('task_assignees').select('*').eq('task_id', tid),
         supabase.from('task_platforms').select('*').eq('task_id', tid),
-        supabase.from('client_platforms').select('*'),
+        supabase.from('client_platforms').select('*').eq('client_id', taskData.client_id),
         supabase.from('profiles').select('*').order('full_name'),
       ])
 
       const cpMap = new Map((clientPlatRes.data ?? []).map(cp => [cp.id, cp]))
       const profMap = new Map((profileRes.data ?? []).map(p => [p.id, p]))
+      setPlatforms(clientPlatRes.data ?? [])
 
       const enrichedPlatforms = (platformRes.data ?? []).map(tp => ({
         ...tp,
@@ -124,6 +130,61 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
     onUpdate()
   }
 
+  const addSubtask = async () => {
+    if (!supabaseConfigured || !taskId || !newSubtaskTitle.trim()) return
+    
+    const assignee = profiles.find(p => p.id === newSubtaskAssignee)
+    const isDesigner = assignee?.role === 'designer' || assignee?.role === 'designer_head'
+
+    if (isDesigner || selectedPlatformIds.length === 0) {
+      await supabase.from('subtasks').insert({
+        task_id: taskId,
+        title: newSubtaskTitle.trim(),
+        assigned_user_id: newSubtaskAssignee || null,
+        is_done: false,
+        sort_order: (task?.subtasks?.length || 0) + 1
+      })
+    } else {
+      // Create multiple platform assignments
+      const platformRows = selectedPlatformIds.map(pid => ({
+        task_id: taskId,
+        client_platform_id: pid,
+        assigned_user_id: newSubtaskAssignee || null,
+        status: 'pending' as any
+      }))
+      await supabase.from('task_platforms').insert(platformRows)
+      
+      // Also optionally create one subtask entry as a "parent" title
+      await supabase.from('subtasks').insert({
+        task_id: taskId,
+        title: newSubtaskTitle.trim(),
+        assigned_user_id: newSubtaskAssignee || null,
+        is_done: false,
+        sort_order: (task?.subtasks?.length || 0) + 1
+      })
+    }
+
+    setNewSubtaskTitle('')
+    setNewSubtaskAssignee('')
+    setSelectedPlatformIds([])
+    void loadTask(taskId)
+    onUpdate()
+  }
+
+  const updateSubtask = async (stId: string, updates: Partial<Subtask>) => {
+    if (!supabaseConfigured) return
+    await supabase.from('subtasks').update(updates).eq('id', stId)
+    if (taskId) void loadTask(taskId)
+    onUpdate()
+  }
+
+  const deleteSubtask = async (stId: string) => {
+    if (!supabaseConfigured || !confirm('Delete this subtask?')) return
+    await supabase.from('subtasks').delete().eq('id', stId)
+    if (taskId) void loadTask(taskId)
+    onUpdate()
+  }
+
   const save = async () => {
     if (!supabaseConfigured || !taskId || !draft) return
     await supabase.from('tasks').update({
@@ -133,6 +194,10 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
       status: draft.status,
       deadline: draft.deadline,
     }).eq('id', taskId)
+    
+    // Save any subtask title changes if we added an 'editingSubtasks' state, 
+    // but for now we'll handle subtasks as individual operations to keep it robust.
+    
     setEditing(false)
     if (taskId) void loadTask(taskId)
     onUpdate()
@@ -342,19 +407,21 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
                 <div className="space-y-2">
                   {task.subtasks?.map(st => {
                     const isExpanded = expandedSubtask === st.id
-                    const assignee = st.assigned_user_id ? profiles.find(p => p.id === st.assigned_user_id) : null
-                    const platform = st.client_platform_id
-                      ? (task.task_platforms?.find(tp => tp.client_platform_id === st.client_platform_id)?.client_platforms as any)?.platform
+                    const assigneeId = st.assigned_user_id
+                    const assignee = assigneeId ? profiles.find(p => p.id === assigneeId) : null
+                    const platform = (st as any).client_platform_id
+                      ? (task.task_platforms?.find(tp => tp.client_platform_id === (st as any).client_platform_id)?.client_platforms as any)?.platform
                       : null
                     const PlatIcon = platform ? (PLATFORM_ICON[platform] || Globe) : null
+                    const isPlatformType = (st as any).is_platform
 
                     return (
                       <div key={st.id} className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden transition-all">
                         {/* Subtask Row */}
-                        <div className="flex items-center gap-3 p-3 cursor-pointer hover:bg-white/[0.03] transition-colors">
+                        <div className="flex items-center gap-3 p-3">
                           {/* Checkbox */}
                           <button
-                            onClick={(e) => { e.stopPropagation(); toggleSubtask(st) }}
+                            onClick={() => toggleSubtask(st)}
                             className="shrink-0 cursor-pointer"
                           >
                             {st.is_done ? (
@@ -365,51 +432,92 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
                               <div className="h-5 w-5 rounded-md border-2 border-white/10 hover:border-[var(--color-accent)]/40 transition-colors" />
                             )}
                           </button>
-                          {/* Title + quick info */}
-                          <div
-                            className="flex-1 min-w-0 cursor-pointer py-1"
-                            onClick={() => setExpandedSubtask(isExpanded ? null : st.id)}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className={`text-sm font-bold block truncate ${st.is_done ? 'text-[#4F5B76] line-through' : 'text-white/80'}`}>
-                                {st.title}
-                              </span>
-                              {(st as any).is_platform && (
-                                <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-white/5 border border-white/5 
-                                  ${(st as any).platform_status === 'posted' ? 'text-emerald-400 border-emerald-400/20' : 'text-indigo-400'}
-                                `}>
-                                  {(st as any).platform_status || 'PENDING'}
+                          
+                          {/* Title + Editor */}
+                          <div className="flex-1 min-w-0 py-1">
+                            {editing && !isPlatformType ? (
+                              <input
+                                className="w-full bg-transparent text-sm font-bold text-white focus:outline-none"
+                                value={st.title}
+                                onChange={(e) => void updateSubtask(st.id, { title: e.target.value })}
+                              />
+                            ) : (
+                              <div 
+                                className="flex items-center gap-2 cursor-pointer"
+                                onClick={() => setExpandedSubtask(isExpanded ? null : st.id)}
+                              >
+                                <span className={`text-sm font-bold block truncate ${st.is_done ? 'text-[#4F5B76] line-through' : 'text-white/80'}`}>
+                                  {st.title}
                                 </span>
-                              )}
-                            </div>
+                                {isPlatformType && (
+                                  <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-white/5 border border-white/5 
+                                    ${(st as any).platform_status === 'posted' ? 'text-emerald-400 border-emerald-400/20' : 'text-indigo-400'}
+                                  `}>
+                                    {(st as any).platform_status || 'PENDING'}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
 
-                          {/* Quick indicators */}
-                          <div className="flex items-center gap-2 shrink-0 px-2 group-hover:bg-white/5 rounded-xl py-1 transition-all">
-                            {assignee && (
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9px] font-black uppercase text-[#4F5B76] hidden sm:block tracking-widest bg-white/5 px-1.5 py-0.5 rounded-md">
-                                  {assignee.full_name.split(' ')[0]}
-                                </span>
-                                <div className="h-6 w-6 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center text-[9px] font-black text-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
-                                  {assignee.full_name.charAt(0)}
+                          {/* Controls / Member Select */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {editing && !isPlatformType ? (
+                              <div className="flex flex-col gap-1 items-end">
+                                <div className="flex items-center gap-2">
+                                  <select
+                                    className="bg-transparent text-[10px] font-bold text-[#4F5B76] focus:outline-none"
+                                    value={st.assigned_user_id || ''}
+                                    onChange={(e) => void updateSubtask(st.id, { assigned_user_id: e.target.value || null })}
+                                  >
+                                    <option value="">No Assignee</option>
+                                    {profiles.map(p => (
+                                      <option key={p.id} value={p.id}>{p.full_name}</option>
+                                    ))}
+                                  </select>
+                                  {(profiles.find(p => p.id === st.assigned_user_id)?.role !== 'designer') && (
+                                    <select
+                                      className="bg-transparent text-[9px] font-black uppercase text-[#EE4667] focus:outline-none border-l border-white/5 pl-2"
+                                      value={st.client_platform_id || ''}
+                                      onChange={(e) => void updateSubtask(st.id, { client_platform_id: e.target.value || null })}
+                                    >
+                                      <option value="">No Platform</option>
+                                      {platforms.map(p => (
+                                        <option key={p.id} value={p.id}>{PLATFORM_LABEL[p.platform as keyof typeof PLATFORM_LABEL] || p.platform}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  <button 
+                                    onClick={() => void deleteSubtask(st.id)}
+                                    className="p-1 text-rose-500 hover:bg-rose-500/10 rounded transition-all"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
                                 </div>
                               </div>
-                            )}
-                            {PlatIcon && (
-                              <div className="h-6 w-6 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center">
-                                <PlatIcon className="h-3.5 w-3.5 text-[#4F5B76]" />
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                {assignee && (
+                                  <div className="h-6 w-6 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center text-[9px] font-black text-indigo-400">
+                                    {assignee.full_name.charAt(0)}
+                                  </div>
+                                )}
+                                {PlatIcon && (
+                                  <div className="h-6 w-6 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center">
+                                    <PlatIcon className="h-3.5 w-3.5 text-[#4F5B76]" />
+                                  </div>
+                                )}
+                                <ChevronDown 
+                                  onClick={() => setExpandedSubtask(isExpanded ? null : st.id)}
+                                  className={`h-3.5 w-3.5 text-[#4F5B76] transition-transform cursor-pointer ${isExpanded ? 'rotate-180' : ''}`} 
+                                />
                               </div>
                             )}
-                            <div className="h-4 w-px bg-white/5 mx-1" />
-                            <div className="cursor-pointer hover:text-white transition-colors">
-                              <ChevronDown className={`h-3.5 w-3.5 text-[#4F5B76] transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
-                            </div>
                           </div>
                         </div>
 
                         {/* Expanded Details */}
-                        {isExpanded && (
+                        {isExpanded && !editing && (
                           <div className="px-3 pb-3 pt-0 border-t border-white/5 space-y-2">
                             {assignee && (
                               <div className="flex items-center gap-2 mt-2">
@@ -424,14 +532,87 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
                                 <span className="text-xs text-white/70">{PLATFORM_LABEL[platform] || platform}</span>
                               </div>
                             )}
-                            {!assignee && !platform && (
-                              <p className="text-xs text-[#4F5B76] italic mt-2">No additional details.</p>
-                            )}
                           </div>
                         )}
                       </div>
                     )
                   })}
+
+                  {/* Add Subtask Entry */}
+                  {editing && (
+                    <div className="flex flex-col gap-2 p-3 rounded-xl border border-dashed border-white/10 bg-white/[0.01]">
+                      <div className="flex items-center gap-3">
+                        <div className="h-5 w-5 flex items-center justify-center text-[#4F5B76]">
+                          <CheckSquare className="h-3.5 w-3.5" />
+                        </div>
+                        <input
+                          className="flex-1 bg-transparent text-sm font-bold text-white/40 focus:text-white focus:outline-none placeholder:text-[#4F5B76]"
+                          placeholder="Add subtask..."
+                          value={newSubtaskTitle}
+                          onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && addSubtask()}
+                        />
+                        {newSubtaskTitle.trim() && (
+                          <button 
+                            onClick={addSubtask}
+                            className="px-2 py-1 bg-[var(--color-accent)] text-[9px] font-black uppercase tracking-widest text-white rounded-md"
+                          >
+                            Add
+                          </button>
+                        )}
+                      </div>
+                      <div className="ml-8 flex items-center gap-4">
+                        <select
+                          className="bg-transparent text-[10px] font-bold text-[#4F5B76] focus:outline-none cursor-pointer hover:text-[var(--color-accent)]"
+                          value={newSubtaskAssignee}
+                          onChange={(e) => setNewSubtaskAssignee(e.target.value)}
+                        >
+                          <option value="">Assign Member</option>
+                          {profiles.map(p => (
+                            <option key={p.id} value={p.id}>{p.full_name}</option>
+                          ))}
+                        </select>
+
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setPlatformMenuOpen(!platformMenuOpen)}
+                            disabled={profiles.find(p => p.id === newSubtaskAssignee)?.role === 'designer'}
+                            className={`h-8 min-w-[120px] rounded-lg bg-black/40 border border-white/5 px-3 text-[9px] font-black uppercase text-white/50 hover:text-white transition-all flex items-center justify-between gap-2 cursor-pointer 
+                              ${(profiles.find(p => p.id === newSubtaskAssignee)?.role?.includes('designer')) ? 'opacity-30 grayscale cursor-not-allowed' : ''}
+                            `}
+                          >
+                            <span>
+                              {selectedPlatformIds.length === 0 ? 'Select Platforms' : `${selectedPlatformIds.length} Platforms`}
+                            </span>
+                            <ChevronDown className="h-3 w-3" />
+                          </button>
+                          
+                          {platformMenuOpen && (
+                            <div className="absolute bottom-full right-0 mb-2 z-[150] w-48 overflow-hidden rounded-xl border border-white/10 bg-[#161B26] p-1 shadow-2xl animate-in fade-in slide-in-from-bottom-2">
+                              {platforms.map(p => {
+                                const isSelected = selectedPlatformIds.includes(p.id)
+                                return (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => setSelectedPlatformIds(prev => 
+                                      prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                                    )}
+                                    className={`flex w-full items-center justify-between px-3 py-2 rounded-lg text-[9px] font-black uppercase transition-all cursor-pointer text-left
+                                      ${isSelected ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)]' : 'text-white/40 hover:bg-white/5 hover:text-white'}`}
+                                  >
+                                    <span>{PLATFORM_LABEL[p.platform as keyof typeof PLATFORM_LABEL] || p.platform}</span>
+                                    {isSelected && <div className="h-1 w-1 rounded-full bg-[var(--color-accent)]" />}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
