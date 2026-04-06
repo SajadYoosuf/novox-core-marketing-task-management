@@ -220,7 +220,7 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
 
       {/* Drawer */}
       <div
-        className={`fixed right-0 top-0 z-[110] h-full w-full max-w-[560px] border-l border-white/5 bg-[#0B0D13] shadow-2xl transition-transform duration-500 ease-out ${taskId ? 'translate-x-0' : 'translate-x-full'}`}
+        className={`fixed right-0 top-0 z-[110] h-full w-full sm:max-w-[560px] border-l border-white/5 bg-[#0B0D13] shadow-2xl transition-transform duration-500 ease-out ${taskId ? 'translate-x-0' : 'translate-x-full'}`}
       >
         {loading && !task ? (
           <div className="flex h-full flex-col items-center justify-center space-y-4">

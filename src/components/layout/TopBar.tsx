@@ -1,10 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
-import { Bell, Moon, Sun, LogOut, User } from 'lucide-react'
+import { Bell, Moon, Sun, LogOut, User, Menu, Search } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '@/stores/themeStore'
 import { useAuthStore } from '@/stores/authStore'
 
-export function TopBar(_props: { search?: string; onSearchChange?: (v: string) => void }) {
+export function TopBar({ 
+  search, 
+  onSearchChange, 
+  onMenuClick 
+}: { 
+  search?: string; 
+  onSearchChange?: (v: string) => void; 
+  onMenuClick?: () => void 
+}) {
   const theme = useThemeStore((s) => s.theme)
   const setTheme = useThemeStore((s) => s.setTheme)
   const profile = useAuthStore((s) => s.profile)
@@ -32,9 +40,27 @@ export function TopBar(_props: { search?: string; onSearchChange?: (v: string) =
   }
 
   return (
-    <header className="relative flex h-[70px] shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-8 backdrop-blur-xl z-50">
-      {/* Left Search Space */}
-      <div className="flex-1 max-w-md" />
+    <header className="relative flex h-[70px] shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 sm:px-8 backdrop-blur-xl z-50">
+      {/* Left Action Space */}
+      <div className="flex flex-1 items-center gap-4 max-w-md">
+        <button 
+          onClick={onMenuClick}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-surface-2)]/50 text-[var(--color-text-muted)] hover:bg-white/5 hover:text-[var(--color-text)] transition-all sm:hidden"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        
+        <div className="relative w-full hidden sm:block">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
+          <input
+            type="text"
+            placeholder="Search everything..."
+            className="h-10 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/50 pl-10 pr-4 text-xs font-medium text-[var(--color-text)] transition-all focus:border-[var(--color-accent)] focus:outline-none focus:ring-4 focus:ring-[var(--color-accent)]/10"
+            value={search}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+          />
+        </div>
+      </div>
 
       {/* Action Center */}
       <div className="flex items-center gap-6">
@@ -58,7 +84,7 @@ export function TopBar(_props: { search?: string; onSearchChange?: (v: string) =
 
         {/* User Profile */}
         <div className="flex items-center gap-4 border-l border-[var(--color-border)] pl-6">
-          <div className="flex flex-col items-end">
+          <div className="hidden sm:flex flex-col items-end">
             <span className="text-sm font-bold text-[var(--color-text)] leading-tight">
               {profile?.full_name || 'Team Member'}
             </span>

@@ -103,7 +103,6 @@ export function Login() {
             setError(null)
           }}
         >
-          {mode === 'login' ? 'Need an account? Register' : 'Already have an account? Sign in'}
         </button>
       </div>
     </div>

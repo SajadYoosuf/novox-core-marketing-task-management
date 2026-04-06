@@ -38,6 +38,7 @@ function Column({
   return (
     <div
       ref={setNodeRef}
+      id={`col-container-${status}`}
       className={`flex w-full flex-col gap-5 rounded-[2.5rem] border border-white/5 bg-white/[0.02] p-6 transition-all duration-300 ${
         isOver ? 'bg-white/[0.05] ring-2 ring-[var(--color-accent)]/20 shadow-2xl shadow-[var(--color-accent)]/5' : ''
       }`}
@@ -109,15 +110,16 @@ export function KanbanBoard({
 
   return (
     <DndContext sensors={sensors} onDragEnd={(ev) => void handleDragEnd(ev)}>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-12 pb-12 animate-in fade-in duration-1000">
+      <div className="flex w-full gap-6 overflow-x-auto pb-12 snap-x snap-mandatory scrollbar-hide animate-in fade-in duration-1000">
         {KANBAN_COLUMNS.map((status) => (
-          <Column 
-            key={status} 
-            status={status} 
-            tasks={tasks.filter((t) => t.status === status)} 
-            onTaskClick={onTaskClick}
-            onTalentClick={onTalentClick}
-          />
+          <div key={status} className="flex-none w-[85vw] sm:w-[320px] snap-center">
+            <Column 
+              status={status} 
+              tasks={tasks.filter((t) => t.status === status)} 
+              onTaskClick={onTaskClick}
+              onTalentClick={onTalentClick}
+            />
+          </div>
         ))}
       </div>
     </DndContext>

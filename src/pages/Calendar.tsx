@@ -50,6 +50,7 @@ export function Calendar() {
   // Interaction State
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
   const [viewingTaskId, setViewingTaskId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'grid' | 'agenda'>('grid')
 
   const load = useCallback(async () => {
     if (!supabaseConfigured) return
@@ -115,11 +116,26 @@ export function Calendar() {
         <div className="space-y-1">
           <h1 className="text-4xl font-bold tracking-tight text-[var(--color-text)] lg:text-5xl">Marketing Calendar</h1>
           <p className="text-lg font-medium text-[var(--color-text-muted)] opacity-80 leading-relaxed capitalize">
-            {format(month, 'MMMM yyyy')} — Global Workflow View
+            {format(month, 'MMMM yyyy')} — Workflow
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          <div className="flex rounded-xl bg-white/5 p-1 border border-white/10">
+            <button 
+              onClick={() => setViewMode('grid')}
+              className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === 'grid' ? 'bg-[var(--color-accent)] text-white' : 'text-white/40 hover:text-white'}`}
+            >
+              Grid
+            </button>
+            <button 
+              onClick={() => setViewMode('agenda')}
+              className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === 'agenda' ? 'bg-[var(--color-accent)] text-white' : 'text-white/40 hover:text-white'}`}
+            >
+              Agenda
+            </button>
+          </div>
+          
           <div className="flex items-center gap-1 rounded-2xl bg-white/5 p-1 border border-white/5 backdrop-blur-xl">
             <button onClick={handlePrevMonth} className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--color-text-muted)] hover:bg-white/5 hover:text-white transition-all transform hover:scale-105">
               <ChevronLeft className="h-5 w-5" />
@@ -139,11 +155,11 @@ export function Calendar() {
         <div className="relative group">
           <Filter className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)]" />
           <select
-            className="h-12 w-52 appearance-none rounded-2xl border border-white/5 bg-white/5 pl-11 pr-10 text-xs font-black uppercase tracking-widest text-white ring-[var(--color-accent)]/20 transition-all focus:bg-white/10 focus:ring-4 focus:outline-none backdrop-blur-xl"
+            className="h-12 w-full sm:w-52 appearance-none rounded-2xl border border-white/5 bg-white/5 pl-11 pr-10 text-xs font-black uppercase tracking-widest text-white ring-[var(--color-accent)]/20 transition-all focus:bg-white/10 focus:ring-4 focus:outline-none backdrop-blur-xl"
             value={filterClient}
             onChange={(e) => setFilterClient(e.target.value)}
           >
-            <option value="" className="bg-[var(--color-surface)]">All Clients</option>
+            <option value="" className="bg-[var(--color-surface)]">All Brands</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id} className="bg-[var(--color-surface)]">{c.name}</option>
             ))}
@@ -151,9 +167,9 @@ export function Calendar() {
         </div>
 
         <div className="relative group">
-          <LayoutGrid className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text-[var(--color-accent)]" />
+          <LayoutGrid className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)] group-focus-within:text(--color-accent)]" />
           <select
-            className="h-12 w-52 appearance-none rounded-2xl border border-white/5 bg-white/5 pl-11 pr-10 text-xs font-black uppercase tracking-widest text-white ring-[var(--color-accent)]/20 transition-all focus:bg-white/10 focus:ring-4 focus:outline-none backdrop-blur-xl"
+            className="h-12 w-full sm:w-52 appearance-none rounded-2xl border border-white/5 bg-white/5 pl-11 pr-10 text-xs font-black uppercase tracking-widest text-white ring-[var(--color-accent)]/20 transition-all focus:bg-white/10 focus:ring-4 focus:outline-none backdrop-blur-xl"
             value={filterPlatform}
             onChange={(e) => setFilterPlatform(e.target.value)}
           >
@@ -166,64 +182,117 @@ export function Calendar() {
         </div>
       </div>
 
-      {/* Calendar Grid */}
-      <div className="rounded-[3rem] border border-white/5 bg-white/[0.02] p-8 backdrop-blur-3xl shadow-2xl overflow-hidden relative">
-        <div className="mb-6 grid grid-cols-7 gap-6">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-            <div key={d} className="text-center text-[11px] font-black uppercase tracking-[0.3em] text-[var(--color-text-muted)] opacity-50">
-              {d}
+      {/* Calendar View Container */}
+      <div className="rounded-[2.5rem] border border-white/5 bg-white/[0.02] p-4 sm:p-8 backdrop-blur-3xl shadow-2xl relative overflow-hidden">
+        {viewMode === 'grid' ? (
+          <div className="hidden sm:block">
+            <div className="mb-6 grid grid-cols-7 gap-6">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                <div key={d} className="text-center text-[11px] font-black uppercase tracking-[0.3em] text-[var(--color-text-muted)] opacity-50">
+                  {d}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        <div className="grid grid-cols-7 gap-6">
-          {calendarDays.map((d) => {
-            const inMonth = isSameMonth(d, month)
-            const activeToday = isToday(d)
-            const dayTasks = tasksOnDay(d)
+            <div className="grid grid-cols-7 gap-4 md:gap-6">
+              {calendarDays.map((d) => {
+                const inMonth = isSameMonth(d, month)
+                const activeToday = isToday(d)
+                const dayTasks = tasksOnDay(d)
 
-            return (
-              <div
-                key={d.toISOString()}
-                onClick={() => setSelectedDay(d)}
-                className={`group relative flex min-h-[160px] flex-col rounded-[2.5rem] border transition-all duration-500 p-5 cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${!inMonth ? 'bg-transparent border-transparent opacity-10 cursor-default' :
-                    activeToday ? 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/80 shadow-[0_20px_50px_rgba(var(--color-accent-rgb),0.1)]' :
-                      'bg-white/[0.04] border-white/5 hover:bg-white/10 hover:border-white/20 hover:shadow-2xl'
-                  }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className={`text-base font-black ${activeToday ? 'text-white' : 'text-white/60'}`}>
-                    {format(d, 'd')}
-                  </span>
-                  {activeToday && (
-                    <div className="h-2 w-2 rounded-full bg-[var(--color-accent)] shadow-[0_0_15px_rgba(var(--color-accent-rgb),0.8)]" />
-                  )}
-                </div>
+                return (
+                  <div
+                    key={d.toISOString()}
+                    onClick={() => setSelectedDay(d)}
+                    className={`group relative flex min-h-[140px] flex-col rounded-[2rem] border transition-all duration-500 p-4 cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${!inMonth ? 'bg-transparent border-transparent opacity-10 cursor-default' :
+                        activeToday ? 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/80 shadow-[0_20px_50px_rgba(var(--color-accent-rgb),0.1)]' :
+                          'bg-white/[0.04] border-white/5 hover:bg-white/10 hover:border-white/20 hover:shadow-2xl'
+                      }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-sm font-black ${activeToday ? 'text-white' : 'text-white/60'}`}>
+                        {format(d, 'd')}
+                      </span>
+                      {activeToday && (
+                        <div className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] shadow-[0_0_15px_rgba(var(--color-accent-rgb),0.8)]" />
+                      )}
+                    </div>
 
-                <div className="mt-4 space-y-2">
-                  {dayTasks.slice(0, 3).map((t) => {
-                    const platform = taskPlatforms.find(tp => tp.task_id === t.id)?.client_platforms as any
-                    return (
-                      <div key={t.id} className="flex h-7 items-center gap-2 rounded-xl bg-white/5 px-3 transition-opacity">
-                        <PlatformIcon platform={platform?.platform} />
-                        <span className="truncate text-[10px] font-black uppercase tracking-tighter text-white/80">
-                          {t.title}
-                        </span>
+                    <div className="mt-3 space-y-1.5">
+                      {dayTasks.slice(0, 3).map((t) => {
+                        const platform = (t as any).task_platforms?.[0]?.client_platforms as any
+                        return (
+                          <div key={t.id} className="flex h-6 items-center gap-2 rounded-lg bg-white/5 px-2 transition-opacity">
+                            <PlatformIcon platform={platform?.platform} />
+                            <span className="truncate text-[9px] font-bold uppercase text-white/70">
+                              {t.title}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {dayTasks.length > 3 && (
+                      <div className="mt-auto pt-2 flex items-center gap-1.5 text-[8px] font-black uppercase tracking-widest text-[var(--color-accent)]">
+                        +{dayTasks.length - 3} more
                       </div>
-                    )
-                  })}
-                </div>
-
-                {dayTasks.length > 3 && (
-                  <div className="mt-auto pt-3 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-[var(--color-accent)]">
-                    <div className="h-1 w-1 rounded-full bg-[var(--color-accent)]" />
-                    +{dayTasks.length - 3} Units
+                    )}
                   </div>
-                )}
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Agenda View (Or Fallback for mobile if grid is too small) */}
+        {(viewMode === 'agenda' || (typeof window !== 'undefined' && window.innerWidth < 640)) && (
+          <div className={viewMode === 'grid' ? 'sm:hidden space-y-6' : 'space-y-6'}>
+            {calendarDays.filter(d => isSameMonth(d, month)).map(d => {
+              const dayTasks = tasksOnDay(d)
+              if (dayTasks.length === 0) return null
+              
+              return (
+                <div key={d.toISOString()} className="space-y-3">
+                  <div className="flex items-center gap-4">
+                    <div className={`flex h-12 w-12 flex-col items-center justify-center rounded-2xl border ${isToday(d) ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]' : 'border-white/5 bg-white/5 text-white/40'}`}>
+                      <span className="text-xs font-black uppercase">{format(d, 'EEE')}</span>
+                      <span className="text-lg font-black leading-none">{format(d, 'd')}</span>
+                    </div>
+                    <div className="h-px flex-1 bg-white/5" />
+                  </div>
+                  
+                  <div className="grid gap-3 pl-16">
+                    {dayTasks.map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => setViewingTaskId(t.id)}
+                        className="flex items-center justify-between rounded-2xl border border-white/5 bg-white/5 p-4 text-left transition-all hover:bg-white/10"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-[var(--color-accent)]">
+                            {t.clients?.name}
+                          </p>
+                          <h4 className="truncate text-sm font-bold text-white">{t.title}</h4>
+                        </div>
+                        <div className={`ml-4 rounded-lg px-3 py-1 text-[8px] font-black uppercase border border-white/10 ${
+                          t.status === 'completed' ? 'text-emerald-400 bg-emerald-400/5' : 'text-blue-400 bg-blue-400/5'
+                        }`}>
+                          {t.status}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+            
+            {calendarDays.filter(d => isSameMonth(d, month) && tasksOnDay(d).length > 0).length === 0 && (
+              <div className="py-20 text-center">
+                <p className="text-sm font-black uppercase tracking-widest text-white/20">Empty workflow for this month</p>
               </div>
-            )
-          })}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Day Overview Modal */}

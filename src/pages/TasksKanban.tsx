@@ -9,8 +9,9 @@ import { TaskDetailDrawer } from '@/components/tasks/TaskDetailDrawer'
 import { TalentTasksDrawer } from '@/components/tasks/TalentTasksDrawer'
 import { CustomDropdown } from '@/components/ui/CustomDropdown'
 import type { Client, TaskWithRelations, Profile } from '@/types/db'
-import { PLATFORM_LABEL } from '@/lib/constants'
+import { PLATFORM_LABEL, STATUS_LABEL } from '@/lib/constants'
 import { logPerformance } from '@/lib/performance'
+import { KANBAN_COLUMNS } from '@/lib/taskWorkflow'
 
 export function TasksKanban() {
   const user = useAuthStore((s) => s.user)
@@ -217,7 +218,23 @@ export function TasksKanban() {
           <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[var(--color-accent)] border-t-transparent shadow-2xl" />
         </div>
       ) : (
-        <div className="py-4">
+        <div className="py-4 space-y-4">
+          {/* Mobile Column Picker */}
+          <div className="flex sm:hidden overflow-x-auto pb-4 gap-2 scrollbar-hide snap-x">
+             {KANBAN_COLUMNS.map((status) => (
+               <button
+                 key={status}
+                 onClick={() => {
+                    const el = document.getElementById(`col-container-${status}`)
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+                 }}
+                 className="flex-none px-4 py-2 rounded-full border border-white/5 bg-white/5 text-[9px] font-black uppercase tracking-widest text-white/40 hover:text-white hover:bg-[var(--color-accent)]/20 transition-all snap-center"
+               >
+                 {STATUS_LABEL[status]}
+               </button>
+             ))}
+          </div>
+          
           <KanbanBoard
             tasks={filtered}
             onStatusChange={onStatusChange}
