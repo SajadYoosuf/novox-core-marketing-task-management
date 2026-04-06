@@ -13,7 +13,11 @@ import {
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
 import { Input, TextArea } from '@/components/ui/Input'
-import type { TaskWithRelations, Subtask, Profile, TaskRow } from '@/types/db'
+import type {
+  TaskWithRelations,
+  Profile,
+  Subtask,
+} from '@/types/db'
 import { format, parseISO } from 'date-fns'
 import { PLATFORM_ICON, PLATFORM_LABEL } from '@/lib/constants'
 
