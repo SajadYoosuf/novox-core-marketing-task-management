@@ -131,11 +131,23 @@ export function TasksKanban() {
 
   async function onStatusChange(taskId: string, status: TaskWithRelations['status']) {
     if (!supabaseConfigured || !userId) return
-    const prev = tasks.find((t) => t.id === taskId)
-    await supabase.from('tasks').update({ status }).eq('id', taskId)
+    const prevTask = tasks.find((t) => t.id === taskId)
+    if (!prevTask || prevTask.status === status) return
 
-    if (status === 'completed' && prev?.status !== 'completed') {
-      const assignees = prev?.task_assignees || []
+    // Optimistic Update
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t))
+
+    const { error } = await supabase.from('tasks').update({ status }).eq('id', taskId)
+    if (error) {
+      console.error('Status update failed:', error)
+      alert(`Status update failed: ${error.message}`)
+      // Revert on error
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: prevTask.status } : t))
+      return
+    }
+
+    if (status === 'completed' && prevTask.status !== 'completed') {
+      const assignees = prevTask.task_assignees || []
       if (assignees.length) {
         for (const row of assignees) {
           await logPerformance(row.user_id, 'task_completed', taskId)
@@ -145,7 +157,8 @@ export function TasksKanban() {
       }
     }
 
-    await load()
+    // Still refetch to ensure everything is in sync (subtasks, etc)
+    void load()
   }
 
   return (

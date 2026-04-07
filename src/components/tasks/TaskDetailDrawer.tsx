@@ -8,7 +8,8 @@ import {
   AlertTriangle,
   Globe,
   ChevronDown,
-  User
+  User,
+  LayoutGrid
 } from 'lucide-react'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { Button } from '@/components/ui/Button'
@@ -19,7 +20,9 @@ import type {
   Subtask,
 } from '@/types/db'
 import { format, parseISO } from 'date-fns'
-import { PLATFORM_ICON, PLATFORM_LABEL } from '@/lib/constants'
+import { STATUS_LABEL, PLATFORM_ICON, PLATFORM_LABEL } from '@/lib/constants'
+import { KANBAN_COLUMNS } from '@/lib/taskWorkflow'
+import { CustomDropdown } from '@/components/ui/CustomDropdown'
 
 interface TaskDetailDrawerProps {
   taskId: string | null
@@ -127,10 +130,41 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
     }
   }, [taskId, loadTask])
 
-  const toggleSubtask = async (st: Subtask) => {
-    if (!supabaseConfigured) return
-    await supabase.from('subtasks').update({ is_done: !st.is_done }).eq('id', st.id)
+  const toggleSubtask = async (st: any) => {
+    if (!supabaseConfigured || !task) return
+    
+    // Optimistic Update
+    const updater = (t: TaskWithRelations | null) => {
+      if (!t) return t
+      return {
+        ...t,
+        subtasks: t.subtasks?.map(s => s.id === st.id ? { ...s, is_done: !s.is_done } : s)
+      }
+    }
+    setTask(prev => updater(prev) as any)
+    setDraft(prev => updater(prev) as any)
+
+    if (st.is_platform) {
+      const newStatus = st.is_done ? 'pending' : 'posted'
+      await supabase.from('task_platforms').update({ status: newStatus }).eq('id', st.id)
+    } else {
+      await supabase.from('subtasks').update({ is_done: !st.is_done }).eq('id', st.id)
+    }
+    
+    // Refetch to confirm
     if (taskId) void loadTask(taskId)
+    onUpdate()
+  }
+
+  const updateStatus = async (status: string) => {
+    if (!supabaseConfigured || !taskId) return
+    const { error } = await supabase.from('tasks').update({ status }).eq('id', taskId)
+    if (error) {
+      console.error('Status update failed:', error)
+      alert(`Failed to update status: ${error.message}`)
+      return
+    }
+    void loadTask(taskId)
     onUpdate()
   }
 
@@ -243,6 +277,16 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
             {/* Header */}
             <div className="relative p-6 pb-5 border-b border-white/5">
               <div className="absolute right-6 top-6 flex items-center gap-2">
+                {task && (
+                  <CustomDropdown
+                    options={KANBAN_COLUMNS.map(s => ({ id: s, name: STATUS_LABEL[s] }))}
+                    value={task.status}
+                    onChange={updateStatus}
+                    placeholder="Status"
+                    className="min-w-[120px] h-9"
+                    icon={<LayoutGrid className="h-3.5 w-3.5" />}
+                  />
+                )}
                 <button
                   onClick={() => setEditing(!editing)}
                   className={`h-9 w-9 flex items-center justify-center rounded-lg border border-white/5 transition-all cursor-pointer ${editing ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]' : 'bg-white/5 text-[#4F5B76] hover:text-white'}`}

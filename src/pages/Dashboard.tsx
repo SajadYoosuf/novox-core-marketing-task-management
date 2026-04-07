@@ -3,7 +3,6 @@ import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { performanceScore } from '@/lib/constants'
 import {
   Clock,
   FileCheck,
@@ -12,9 +11,13 @@ import {
   Globe,
   MoreHorizontal,
   Users,
-  CheckCircle2
+  CheckCircle2,
+  Check,
+  X
 } from 'lucide-react'
 import type { Profile } from '@/types/db'
+import { TaskDetailDrawer } from '@/components/tasks/TaskDetailDrawer'
+import { logPerformance } from '@/lib/performance'
 import { formatDistanceToNow, parseISO, isBefore } from 'date-fns'
 
 interface DashboardStats {
@@ -23,33 +26,39 @@ interface DashboardStats {
   pendingReview: number
   overdue: number
   completed: number
+  totalSubtasks: number
+  completedSubtasks: number
   totalMembers: number
 }
 
 interface ActivityEvent {
   id: string
-  user_id: string
+  user_id?: string
   event: string
-  task_id: string
+  task_id?: string
   timestamp: string
   taskTitle?: string
   userName?: string
+  type: 'log' | 'task' | 'subtask'
 }
 
 interface EmployeeSnapshot extends Profile {
   score: number
   activeTasks: number
   completed: number
+  activeSubtasks: number
+  completedSubtasks: number
 }
 
 export function Dashboard() {
   const profile = useAuthStore((s) => s.profile)
   const isElevated = useAuthStore((s) => s.isElevated())
 
-  const [stats, setStats] = useState<DashboardStats>({ total: 0, inProgress: 0, pendingReview: 0, overdue: 0, completed: 0, totalMembers: 0 })
+  const [stats, setStats] = useState<DashboardStats>({ total: 0, inProgress: 0, pendingReview: 0, overdue: 0, completed: 0, totalSubtasks: 0, completedSubtasks: 0, totalMembers: 0 })
   const [teamSnapshots, setTeamSnapshots] = useState<EmployeeSnapshot[]>([])
   const [activities, setActivities] = useState<ActivityEvent[]>([])
   const [approvals, setApprovals] = useState<any[]>([])
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -65,12 +74,12 @@ export function Dashboard() {
         platformsRes,
         subtasksRes
       ] = await Promise.all([
-        supabase.from('tasks').select('id, status, deadline, title, clients(name)'),
+        supabase.from('tasks').select('id, status, deadline, title, created_at, clients(name)').order('created_at', { ascending: false }).limit(50),
         supabase.from('profiles').select('*'),
-        supabase.from('performance_logs').select('*').order('created_at', { ascending: false }),
+        supabase.from('performance_logs').select('*').order('created_at', { ascending: false }).limit(50),
         supabase.from('task_assignees').select('*'),
         supabase.from('task_platforms').select('*'),
-        supabase.from('subtasks').select('task_id, assigned_user_id')
+        supabase.from('subtasks').select('id, task_id, title, assigned_user_id, is_done').order('sort_order', { ascending: true })
       ])
 
       const safeTasks = tasksRes.data || []
@@ -91,22 +100,37 @@ export function Dashboard() {
           t.deadline && isBefore(parseISO(t.deadline), now)
         ).length,
         completed: safeTasks.filter(t => t.status === 'completed' || t.status === 'approved').length,
+        totalSubtasks: safeSubtasks.length,
+        completedSubtasks: safeSubtasks.filter(st => st.is_done).length,
         totalMembers: safeProfiles.filter(p => p.role !== 'admin').length
       })
 
       // 2. Team Snapshots
-      const byUser = new Map<string, { completed: number; delayed: number; rejected: number; activeTasks: number }>()
+      const byUser = new Map<string, { completed: number; delayed: number; rejected: number; activeTasks: number; activeSubtasks: number; completedSubtasks: number }>()
       safeProfiles.forEach(p => {
         const userTaskIds = new Set([
           ...safeAssignees.filter(a => a.user_id === p.id).map(a => a.task_id),
           ...safePlatforms.filter(tp => tp.assigned_user_id === p.id).map(tp => tp.task_id),
           ...safeSubtasks.filter(st => st.assigned_user_id === p.id).map(st => st.task_id)
         ])
+        
         const activeCount = safeTasks.filter(t =>
           userTaskIds.has(t.id) && 
           t.status !== 'completed' && t.status !== 'approved' && t.status !== 'pending'
         ).length
-        byUser.set(p.id, { completed: 0, delayed: 0, rejected: 0, activeTasks: activeCount })
+
+        const userSubtasks = safeSubtasks.filter(st => st.assigned_user_id === p.id)
+        const activeSubtasksCount = userSubtasks.filter(st => !st.is_done).length
+        const completedSubtasksCount = userSubtasks.filter(st => st.is_done).length
+
+        byUser.set(p.id, { 
+          completed: 0, 
+          delayed: 0, 
+          rejected: 0, 
+          activeTasks: activeCount,
+          activeSubtasks: activeSubtasksCount,
+          completedSubtasks: completedSubtasksCount
+        })
       })
 
       safeLogs.forEach(log => {
@@ -121,23 +145,58 @@ export function Dashboard() {
       const snapshots = safeProfiles
         .filter(u => u.role !== 'admin')
         .map(u => {
-          const b = byUser.get(u.id) || { completed: 0, delayed: 0, rejected: 0, activeTasks: 0 }
+          const b = byUser.get(u.id) || { completed: 0, delayed: 0, rejected: 0, activeTasks: 0, activeSubtasks: 0, completedSubtasks: 0 }
+          const totalActions = (b.activeTasks + b.completed) + (b.activeSubtasks + b.completedSubtasks)
+          const completedActions = b.completed + b.completedSubtasks
+          
+          // Calculate a percentage-based score (0-100)
+          const baseScore = totalActions > 0 ? (completedActions / totalActions) * 100 : 0
+          // Apply penalties for rejections or delays if any exist
+          const finalScore = Math.max(0, Math.min(100, Math.round(baseScore - (b.delayed * 5) - (b.rejected * 10))))
+          
           return {
             ...u,
-            score: Math.max(0, performanceScore(b.completed, b.delayed, b.rejected)),
+            score: finalScore,
             activeTasks: b.activeTasks,
-            completed: b.completed
+            completed: b.completed,
+            activeSubtasks: b.activeSubtasks,
+            completedSubtasks: b.completedSubtasks
           }
         }).sort((a, b) => b.score - a.score)
       setTeamSnapshots(snapshots)
 
-      // 3. Activity
-      const recentLogs = safeLogs.slice(0, 4).map(l => ({
-        ...l,
-        userName: safeProfiles.find(p => p.id === l.user_id)?.full_name || 'Team member',
-        timestamp: l.created_at
-      })) as ActivityEvent[]
-      setActivities(recentLogs)
+      // 3. Activity (Merge performance logs, task creation, and subtask assigned)
+      const activityEvents: ActivityEvent[] = [
+        ...safeLogs.map(l => ({
+          id: l.id,
+          user_id: l.user_id,
+          event: l.event,
+          task_id: l.task_id,
+          timestamp: l.created_at,
+          userName: safeProfiles.find(p => p.id === l.user_id)?.full_name || 'Team member',
+          type: 'log' as const
+        })),
+        ...safeTasks.slice(0, 10).map(t => ({
+          id: `task-${t.id}`,
+          event: 'New Task Created',
+          task_id: t.id,
+          taskTitle: t.title,
+          timestamp: t.created_at,
+          type: 'task' as const
+        })),
+        ...safeSubtasks.slice(0, 10).map(st => ({
+          id: `subtask-${st.id}`,
+          user_id: st.assigned_user_id,
+          event: 'Subtask Assigned',
+          task_id: st.task_id,
+          taskTitle: st.title,
+          timestamp: (st as any).created_at || (st as any).updated_at || new Date().toISOString(),
+          userName: safeProfiles.find(p => p.id === st.assigned_user_id)?.full_name || 'Team member',
+          type: 'subtask' as const
+        }))
+      ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      
+      setActivities(activityEvents.slice(0, 8))
 
       // 4. Approvals
       const reviewTasks = safeTasks.filter(t => t.status === 'review').slice(0, 3)
@@ -161,6 +220,20 @@ export function Dashboard() {
       setLoading(false)
     }
   }, [isElevated])
+
+  const handleApprove = async (taskId: string) => {
+    if (!supabaseConfigured) return
+    await supabase.from('tasks').update({ status: 'approved' }).eq('id', taskId)
+    await logPerformance(profile?.id || '', 'task_completed', taskId)
+    void load()
+  }
+
+  const handleReject = async (taskId: string) => {
+    if (!supabaseConfigured) return
+    await supabase.from('tasks').update({ status: 'rejected' }).eq('id', taskId)
+    await logPerformance(profile?.id || '', 'task_rejected', taskId)
+    void load()
+  }
 
   useEffect(() => {
     void load()
@@ -243,34 +316,44 @@ export function Dashboard() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-12">
-        <Card className="lg:col-span-4 flex flex-col items-center justify-center space-y-8 border-[var(--color-border)] bg-[var(--color-surface-2)]/40 p-10 backdrop-blur-xl">
-          <div className="flex w-full items-center justify-between">
-            <h2 className="text-xl font-bold tracking-tight text-[var(--color-text)]">Task Balance</h2>
-            <MoreHorizontal className="h-5 w-5 text-[var(--color-text-muted)]" />
-          </div>
-          <div className="relative flex items-center justify-center">
-            <svg className="h-48 w-48 -rotate-90 transform">
-              <circle cx="96" cy="96" r="80" fill="transparent" stroke="currentColor" strokeWidth="12" className="text-[var(--color-border)]" />
-              <circle cx="96" cy="96" r="80" fill="transparent" stroke="var(--color-accent)" strokeWidth="14" strokeDasharray="502" strokeDashoffset={502 * (1 - (stats.total > 0 ? stats.completed / stats.total : 0))} strokeLinecap="round" />
-              <circle cx="96" cy="96" r="80" fill="transparent" stroke="#3b82f6" strokeWidth="14" strokeDasharray="502" strokeDashoffset={502 * (1 - (stats.total > 0 ? stats.inProgress / stats.total : 0))} strokeLinecap="round" />
-            </svg>
-            <div className="absolute flex flex-col items-center">
-              <span className="text-4xl font-black text-[var(--color-text)]">{stats.total}</span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Tasks</span>
+        <Card className="lg:col-span-4 flex flex-col border-[var(--color-border)] bg-[var(--color-surface-2)]/40 p-6 backdrop-blur-xl">
+          <div className="flex w-full items-center justify-between mb-4">
+            <h2 className="text-sm font-black uppercase tracking-widest text-[var(--color-text)]">Task Balance</h2>
+            <div className="flex gap-1">
+              <div className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" />
+              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             </div>
           </div>
-          <div className="flex w-full justify-between px-4">
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-[var(--color-accent)]" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Done</span>
+          
+          <div className="flex flex-1 items-center justify-around gap-4 px-2">
+            {/* Task Chart (Big) */}
+            <div className="relative flex flex-col items-center">
+              <div className="relative h-28 w-28">
+                <svg className="h-28 w-28 -rotate-90 transform">
+                  <circle cx="56" cy="56" r="48" fill="transparent" stroke="currentColor" strokeWidth="6" className="text-[var(--color-border)] opacity-20" />
+                  <circle cx="56" cy="56" r="48" fill="transparent" stroke="var(--color-accent)" strokeWidth="8" strokeDasharray="301" strokeDashoffset={301 * (1 - (stats.total > 0 ? stats.completed / stats.total : 0))} strokeLinecap="round" />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-xl font-black text-[var(--color-text)] leading-none">{stats.total}</span>
+                  <span className="text-[8px] font-bold text-[var(--color-text-muted)] uppercase tracking-tighter">Tasks</span>
+                </div>
+              </div>
+              <p className="mt-2 text-[10px] font-black text-[var(--color-accent)]">{Math.round((stats.completed / (stats.total || 1)) * 100)}%</p>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-pink-500" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Wait</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-blue-500" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Active</span>
+
+            {/* Subtask Chart (Small) */}
+            <div className="relative flex flex-col items-center">
+              <div className="relative h-20 w-20">
+                <svg className="h-20 w-20 -rotate-90 transform">
+                  <circle cx="40" cy="40" r="32" fill="transparent" stroke="currentColor" strokeWidth="5" className="text-[var(--color-border)] opacity-20" />
+                  <circle cx="40" cy="40" r="32" fill="transparent" stroke="#10b981" strokeWidth="6" strokeDasharray="201" strokeDashoffset={201 * (1 - (stats.totalSubtasks > 0 ? stats.completedSubtasks / stats.totalSubtasks : 0))} strokeLinecap="round" />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-sm font-black text-[var(--color-text)] leading-none">{stats.totalSubtasks}</span>
+                  <span className="text-[7px] font-bold text-[var(--color-text-muted)] uppercase tracking-tighter">Subtasks</span>
+                </div>
+              </div>
+              <p className="mt-2 text-[10px] font-black text-emerald-500">{Math.round((stats.completedSubtasks / (stats.totalSubtasks || 1)) * 100)}%</p>
             </div>
           </div>
         </Card>
@@ -292,7 +375,9 @@ export function Dashboard() {
                     </div>
                     <div className="flex flex-col">
                       <span className="text-xs font-bold text-[var(--color-text)] uppercase tracking-tight">{ts.full_name}</span>
-                      <span className="text-[10px] text-[var(--color-text-muted)] font-medium">{ts.activeTasks} active tasks</span>
+                      <span className="text-[10px] text-[var(--color-text-muted)] font-medium">
+                        {ts.completedSubtasks}/{ts.activeSubtasks + ts.completedSubtasks} subtasks done
+                      </span>
                     </div>
                   </div>
                   <span className="text-xs font-black text-[var(--color-accent)]">{ts.score}%</span>
@@ -313,18 +398,27 @@ export function Dashboard() {
         <Card className="lg:col-span-4 space-y-8 border-[var(--color-border)] bg-[var(--color-surface-2)]/40 p-8 backdrop-blur-xl">
           <h2 className="text-xl font-bold tracking-tight text-[var(--color-text)]">Recent Activity</h2>
           <div className="relative space-y-8 before:absolute before:left-[11px] before:top-2 before:h-[calc(100%-16px)] before:w-px before:bg-[var(--color-border)]">
-            {activities.map((act, i) => (
+            {activities.map((act) => (
               <div key={act.id} className="relative pl-10">
-                <div className={`absolute left-0 top-1 h-6 w-6 rounded-full border-4 border-[var(--color-surface-2)] shadow-sm ${i === 0 ? 'bg-indigo-500' : i === 1 ? 'bg-pink-500' : 'bg-slate-500'}`} />
+                <div className={`absolute left-0 top-1 h-6 w-6 rounded-full border-4 border-[var(--color-surface-2)] shadow-sm ${
+                  act.type === 'task' ? 'bg-amber-500' : 
+                  act.type === 'subtask' ? 'bg-emerald-500' :
+                  act.event === 'task_completed' ? 'bg-blue-500' :
+                  act.event === 'task_rejected' ? 'bg-rose-500' : 'bg-slate-500'
+                }`} />
                 <div className="space-y-1">
                   <p className="text-[10px] font-bold text-[var(--color-text-muted)]">{formatDistanceToNow(parseISO(act.timestamp))} ago</p>
                   <p className="text-sm font-bold text-[var(--color-text)] leading-snug">
-                    {act.event === 'task_completed' ? `Task completed by ${act.userName}` :
+                    {act.type === 'task' ? `New Task: ${act.taskTitle}` :
+                      act.type === 'subtask' ? `Subtask Assigned: ${act.taskTitle}` :
+                      act.event === 'task_completed' ? `Task completed by ${act.userName}` :
                       act.event === 'task_rejected' ? `Feedback provided by Head Office` :
-                        `${act.userName} updated task status`}
+                        `${act.userName || 'System'} ${act.event}`}
                   </p>
                   <p className="text-[11px] text-[var(--color-text-muted)] leading-relaxed opacity-60">
-                    Updated just now.
+                    {act.type === 'subtask' ? `To ${act.userName}` : 
+                     act.type === 'task' ? 'Added to central workflow' :
+                     'System Update'}
                   </p>
                 </div>
               </div>
@@ -358,9 +452,29 @@ export function Dashboard() {
                   </div>
                   <p className="text-xs text-[var(--color-text-muted)] opacity-60">Waiting for approval</p>
                 </div>
-                <Button variant="secondary" className="bg-white/5 border-white/10 text-xs px-6 py-2 h-9 rounded-xl font-bold hover:bg-white/10 transition-all">
-                  Inspect
-                </Button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleApprove(app.id)}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all shadow-lg shadow-emerald-500/10"
+                    title="Approve"
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleReject(app.id)}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all shadow-lg shadow-rose-500/10"
+                    title="Reject"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setSelectedTaskId(app.id)}
+                    className="bg-white/5 border-white/10 text-xs px-6 py-2 h-9 rounded-xl font-bold hover:bg-white/10 transition-all ml-2"
+                  >
+                    Inspect
+                  </Button>
+                </div>
               </div>
             ))}
             {approvals.length === 0 && (
@@ -373,6 +487,12 @@ export function Dashboard() {
 
 
       </div>
+
+      <TaskDetailDrawer
+        taskId={selectedTaskId}
+        onClose={() => setSelectedTaskId(null)}
+        onUpdate={load}
+      />
     </div>
   )
 }
