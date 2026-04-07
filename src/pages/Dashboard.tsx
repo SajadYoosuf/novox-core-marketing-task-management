@@ -11,7 +11,8 @@ import {
   Briefcase,
   Globe,
   MoreHorizontal,
-  Users
+  Users,
+  CheckCircle2
 } from 'lucide-react'
 import type { Profile } from '@/types/db'
 import { formatDistanceToNow, parseISO, isBefore } from 'date-fns'
@@ -21,6 +22,7 @@ interface DashboardStats {
   inProgress: number
   pendingReview: number
   overdue: number
+  completed: number
   totalMembers: number
 }
 
@@ -44,7 +46,7 @@ export function Dashboard() {
   const profile = useAuthStore((s) => s.profile)
   const isElevated = useAuthStore((s) => s.isElevated())
 
-  const [stats, setStats] = useState<DashboardStats>({ total: 0, inProgress: 0, pendingReview: 0, overdue: 0, totalMembers: 0 })
+  const [stats, setStats] = useState<DashboardStats>({ total: 0, inProgress: 0, pendingReview: 0, overdue: 0, completed: 0, totalMembers: 0 })
   const [teamSnapshots, setTeamSnapshots] = useState<EmployeeSnapshot[]>([])
   const [activities, setActivities] = useState<ActivityEvent[]>([])
   const [approvals, setApprovals] = useState<any[]>([])
@@ -88,6 +90,7 @@ export function Dashboard() {
           t.status !== 'completed' && t.status !== 'approved' &&
           t.deadline && isBefore(parseISO(t.deadline), now)
         ).length,
+        completed: safeTasks.filter(t => t.status === 'completed' || t.status === 'approved').length,
         totalMembers: safeProfiles.filter(p => p.role !== 'admin').length
       })
 
@@ -221,11 +224,22 @@ export function Dashboard() {
             <FileCheck className="h-6 w-6 text-purple-500 opacity-20" />
           </div>
           <div className="mt-6 h-1 w-full overflow-hidden rounded-full bg-[var(--color-border)]">
-            <div className="h-full w-[45%] bg-purple-500" />
+            <div className="h-full bg-purple-500" style={{ width: stats.total > 0 ? `${(stats.pendingReview / stats.total) * 100}%` : '0%' }} />
           </div>
         </Card>
 
-
+        <Card className="group relative overflow-hidden border-[var(--color-border)] bg-[var(--color-surface-2)]/40 p-6 backdrop-blur-xl hover:border-[var(--color-accent)]/30 transition-all">
+          <div className="flex justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)]">Completed</p>
+              <h3 className="mt-2 text-4xl font-black text-[var(--color-text)]">{stats.completed}</h3>
+            </div>
+            <CheckCircle2 className="h-6 w-6 text-emerald-500 opacity-20" />
+          </div>
+          <div className="mt-6 h-1 w-full overflow-hidden rounded-full bg-[var(--color-border)]">
+            <div className="h-full bg-emerald-500" style={{ width: stats.total > 0 ? `${(stats.completed / stats.total) * 100}%` : '0%' }} />
+          </div>
+        </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-12">
@@ -237,8 +251,8 @@ export function Dashboard() {
           <div className="relative flex items-center justify-center">
             <svg className="h-48 w-48 -rotate-90 transform">
               <circle cx="96" cy="96" r="80" fill="transparent" stroke="currentColor" strokeWidth="12" className="text-[var(--color-border)]" />
-              <circle cx="96" cy="96" r="80" fill="transparent" stroke="var(--color-accent)" strokeWidth="14" strokeDasharray="502" strokeDashoffset={502 * (1 - 0.6)} strokeLinecap="round" />
-              <circle cx="96" cy="96" r="80" fill="transparent" stroke="#ec4899" strokeWidth="14" strokeDasharray="502" strokeDashoffset={502 * (1 - 0.15)} strokeLinecap="round" />
+              <circle cx="96" cy="96" r="80" fill="transparent" stroke="var(--color-accent)" strokeWidth="14" strokeDasharray="502" strokeDashoffset={502 * (1 - (stats.total > 0 ? stats.completed / stats.total : 0))} strokeLinecap="round" />
+              <circle cx="96" cy="96" r="80" fill="transparent" stroke="#3b82f6" strokeWidth="14" strokeDasharray="502" strokeDashoffset={502 * (1 - (stats.total > 0 ? stats.inProgress / stats.total : 0))} strokeLinecap="round" />
             </svg>
             <div className="absolute flex flex-col items-center">
               <span className="text-4xl font-black text-[var(--color-text)]">{stats.total}</span>
