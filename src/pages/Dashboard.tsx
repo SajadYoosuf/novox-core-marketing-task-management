@@ -9,7 +9,6 @@ import {
   Camera,
   Briefcase,
   Globe,
-  MoreHorizontal,
   Users,
   CheckCircle2,
   Check,
