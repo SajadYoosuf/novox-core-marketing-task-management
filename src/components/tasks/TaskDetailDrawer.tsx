@@ -133,16 +133,16 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
   const toggleSubtask = async (st: any) => {
     if (!supabaseConfigured || !task) return
     
-    // Optimistic Update
-    const updater = (t: TaskWithRelations | null) => {
+    // Optimistic Update helper
+    const updater = <T extends Partial<TaskWithRelations> | null>(t: T): T => {
       if (!t) return t
       return {
         ...t,
-        subtasks: t.subtasks?.map(s => s.id === st.id ? { ...s, is_done: !s.is_done } : s)
+        subtasks: (t.subtasks || []).map((s: any) => s.id === st.id ? { ...s, is_done: !s.is_done } : s)
       }
     }
-    setTask(prev => updater(prev) as any)
-    setDraft(prev => updater(prev) as any)
+    setTask(prev => updater(prev) as TaskWithRelations | null)
+    setDraft(prev => updater(prev) as Partial<TaskWithRelations>)
 
     if (st.is_platform) {
       const newStatus = st.is_done ? 'pending' : 'posted'
