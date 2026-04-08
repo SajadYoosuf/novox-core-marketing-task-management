@@ -73,16 +73,7 @@ export interface TaskAssignee {
   profiles?: Profile | null
 }
 
-export interface TaskPlatformRow {
-  id: string
-  task_id: string
-  client_platform_id: string
-  assigned_user_id: string | null
-  status: TaskStatus
-  submission_required: boolean
-  client_platforms?: ClientPlatform | null
-  assignee?: Profile | null
-}
+
 
 export interface Subtask {
   id: string
@@ -91,7 +82,10 @@ export interface Subtask {
   is_done: boolean
   sort_order: number
   client_platform_id: string | null
+  platform_type: PlatformType | null
   assigned_user_id: string | null
+  status: TaskStatus
+  submission_required: boolean
   client_platforms?: ClientPlatform | null
   profiles?: Profile | null
 }
@@ -132,6 +126,5 @@ export interface NotificationRow {
 export interface TaskWithRelations extends TaskRow {
   clients?: Client | null
   task_assignees?: TaskAssignee[]
-  task_platforms?: TaskPlatformRow[]
   subtasks?: Subtask[]
 }

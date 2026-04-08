@@ -32,8 +32,8 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className={`relative z-[101] max-h-[85dvh] w-full overflow-y-auto rounded-t-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl sm:max-h-[90vh] sm:rounded-2xl sm:p-6 ${
-          wide ? 'sm:max-w-3xl' : 'sm:max-w-lg'
+        className={`relative z-[101] max-h-[85dvh] w-full overflow-y-auto rounded-t-2xl border border-white/5 bg-[#0B0D13]/60 backdrop-blur-2xl shadow-2xl sm:max-h-[90vh] sm:rounded-3xl ${
+          wide ? 'sm:max-w-4xl p-0' : 'sm:max-w-lg p-6'
         }`}
       >
         {!noHeaderStyles && (

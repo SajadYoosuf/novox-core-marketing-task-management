@@ -137,21 +137,17 @@ export function TaskCard({ task, onClick, onTalentClick }: TaskCardProps) {
           </div>
         )}
 
-        {/* Platform Badges */}
-        {task.task_platforms && task.task_platforms.length > 0 && (
+        {/* Platform Badges (Unified from subtasks) */}
+        {task.subtasks && task.subtasks.some(s => s.platform_type) && (
           <div className="mt-5 flex flex-wrap gap-1.5">
-            {task.task_platforms.map(tp => {
-              const platform = (tp.client_platforms as any)?.platform
-              if (!platform) return null
-              return (
-                <div key={tp.id} className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.03] border border-white/5 px-2 py-1 transition-all group-hover:border-white/10">
-                  <PlatformIcon platform={platform} />
-                  <span className="text-[8px] font-bold uppercase tracking-widest text-white/50">
-                    {platform}
-                  </span>
-                </div>
-              )
-            })}
+            {task.subtasks.filter(s => s.platform_type).map(st => (
+              <div key={st.id} className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.03] border border-white/5 px-2 py-1 transition-all group-hover:border-white/10">
+                <PlatformIcon platform={st.platform_type || undefined} />
+                <span className="text-[8px] font-bold uppercase tracking-widest text-white/50">
+                  {st.platform_type}
+                </span>
+              </div>
+            ))}
           </div>
         )}
 

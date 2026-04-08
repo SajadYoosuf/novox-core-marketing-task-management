@@ -11,7 +11,9 @@ import {
   endOfWeek,
   isToday,
   addMonths,
-  subMonths
+  subMonths,
+  addDays,
+  subDays
 } from 'date-fns'
 import {
   ChevronLeft,
@@ -24,7 +26,7 @@ import {
   Share2
 } from 'lucide-react'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
-import type { Client, TaskRow, TaskPlatformRow } from '@/types/db'
+import type { Client, TaskRow, Subtask } from '@/types/db'
 
 const PlatformIcon = ({ platform }: { platform?: string }) => {
   const p = platform?.toLowerCase()
@@ -45,7 +47,7 @@ export function Calendar() {
   const [clients, setClients] = useState<Client[]>([])
   const [filterClient, setFilterClient] = useState('')
   const [filterPlatform, setFilterPlatform] = useState('')
-  const [taskPlatforms, setTaskPlatforms] = useState<TaskPlatformRow[]>([])
+  const [subtasks, setSubtasks] = useState<Subtask[]>([])
   
   // Interaction State
   const [selectedDay, setSelectedDay] = useState<Date | null>(null)
@@ -58,10 +60,11 @@ export function Calendar() {
     setTasks((t as any[]) ?? [])
     const { data: c } = await supabase.from('clients').select('*')
     setClients((c as Client[]) ?? [])
-    const { data: tp } = await supabase
-      .from('task_platforms')
-      .select('*, client_platforms(platform)')
-    setTaskPlatforms((tp as TaskPlatformRow[]) ?? [])
+    const { data: st } = await supabase
+      .from('subtasks')
+      .select('*')
+      .not('platform_type', 'is', null)
+    setSubtasks((st as Subtask[]) ?? [])
   }, [])
 
   useEffect(() => {
@@ -73,11 +76,11 @@ export function Calendar() {
     if (filterClient) list = list.filter((t) => t.client_id === filterClient)
     if (filterPlatform) {
       list = list.filter((t) =>
-        taskPlatforms.some(tp => tp.task_id === t.id && (tp.client_platforms as any)?.platform === filterPlatform)
+        subtasks.some(st => st.task_id === t.id && st.platform_type === filterPlatform)
       )
     }
     return list
-  }, [tasks, filterClient, filterPlatform, taskPlatforms])
+  }, [tasks, filterClient, filterPlatform, subtasks])
 
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(month))
@@ -107,7 +110,19 @@ export function Calendar() {
 
   const handlePrevMonth = () => setMonth(m => subMonths(m, 1))
   const handleNextMonth = () => setMonth(m => addMonths(m, 1))
-  const handleToday = () => setMonth(new Date())
+  const handlePrevDay = () => setMonth(m => {
+    const next = subDays(m, 1)
+    if (!isSameMonth(next, m)) {
+      // month state handles the view
+    }
+    return next
+  })
+  const handleNextDay = () => setMonth(m => addDays(m, 1))
+  const handleToday = () => {
+    const now = new Date()
+    setMonth(now)
+    setSelectedDay(now)
+  }
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-8 animate-in fade-in duration-700">
@@ -120,8 +135,34 @@ export function Calendar() {
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex rounded-xl bg-white/5 p-1 border border-white/10">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+            {/* Month Nav */}
+            <div className="flex h-12 items-center gap-1 rounded-2xl bg-white/5 p-1 border border-white/5 backdrop-blur-xl w-full sm:w-auto justify-between sm:justify-start">
+              <button onClick={handlePrevMonth} className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--color-text-muted)] hover:bg-white/5 hover:text-white transition-all transform hover:scale-105" title="Previous Month">
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <span className="px-4 text-[10px] font-black uppercase tracking-[0.2em] text-white/60 sm:hidden">Month</span>
+              <button onClick={handleNextMonth} className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--color-text-muted)] hover:bg-white/5 hover:text-white transition-all transform hover:scale-105" title="Next Month">
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Day/Today Nav */}
+            <div className="flex h-12 items-center gap-1 rounded-2xl bg-white/5 p-1 border border-white/5 backdrop-blur-xl w-full sm:w-auto justify-between sm:justify-start">
+              <button onClick={handlePrevDay} className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--color-text-muted)] hover:bg-white/5 hover:text-white transition-all transform hover:scale-105 sm:hidden" title="Previous Day">
+                <ChevronLeft className="h-4 w-4 opacity-50" />
+              </button>
+              <button onClick={handleToday} className="flex-1 sm:flex-none px-6 text-[10px] font-black uppercase tracking-[0.2em] text-white hover:text-[var(--color-accent)] transition-colors">
+                Today
+              </button>
+              <button onClick={handleNextDay} className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--color-text-muted)] hover:bg-white/5 hover:text-white transition-all transform hover:scale-105 sm:hidden" title="Next Day">
+                <ChevronRight className="h-4 w-4 opacity-50" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex rounded-xl bg-white/5 p-1 border border-white/10 ml-auto">
             <button 
               onClick={() => setViewMode('grid')}
               className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === 'grid' ? 'bg-[var(--color-accent)] text-white' : 'text-white/40 hover:text-white'}`}
@@ -133,18 +174,6 @@ export function Calendar() {
               className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${viewMode === 'agenda' ? 'bg-[var(--color-accent)] text-white' : 'text-white/40 hover:text-white'}`}
             >
               Agenda
-            </button>
-          </div>
-          
-          <div className="flex items-center gap-1 rounded-2xl bg-white/5 p-1 border border-white/5 backdrop-blur-xl">
-            <button onClick={handlePrevMonth} className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--color-text-muted)] hover:bg-white/5 hover:text-white transition-all transform hover:scale-105">
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <button onClick={handleToday} className="px-6 text-[10px] font-black uppercase tracking-[0.2em] text-white hover:text-[var(--color-accent)] transition-colors">
-              Today
-            </button>
-            <button onClick={handleNextMonth} className="flex h-10 w-10 items-center justify-center rounded-xl text-[var(--color-text-muted)] hover:bg-white/5 hover:text-white transition-all transform hover:scale-105">
-              <ChevronRight className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -247,18 +276,44 @@ export function Calendar() {
         {/* Agenda View (Or Fallback for mobile if grid is too small) */}
         {(viewMode === 'agenda' || (typeof window !== 'undefined' && window.innerWidth < 640)) && (
           <div className={viewMode === 'grid' ? 'sm:hidden space-y-6' : 'space-y-6'}>
+            
+            {/* Mobile Day Spinner */}
+            <div className="flex overflow-x-auto pb-4 scrollbar-hide gap-2 sm:hidden px-2 -mx-2">
+              {calendarDays.filter(d => isSameMonth(d, month)).map(d => {
+                const active = selectedDay && isSameDay(d, selectedDay)
+                const hasTasks = tasksOnDay(d).length > 0
+                return (
+                  <button
+                    key={d.toISOString()}
+                    onClick={() => setSelectedDay(d)}
+                    className={`flex-shrink-0 flex flex-col items-center justify-center w-12 h-16 rounded-2xl border transition-all ${
+                      active ? 'bg-[var(--color-accent)] border-[var(--color-accent)] text-white shadow-lg' : 
+                      'bg-white/5 border-white/5 text-white/40 hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="text-[8px] font-black uppercase opacity-60">{format(d, 'EEE')}</span>
+                    <span className="text-sm font-black">{format(d, 'd')}</span>
+                    {hasTasks && !active && <div className="mt-1 h-1 w-1 rounded-full bg-[var(--color-accent)]" />}
+                  </button>
+                )
+              })}
+            </div>
+
             {calendarDays.filter(d => isSameMonth(d, month)).map(d => {
               const dayTasks = tasksOnDay(d)
-              if (dayTasks.length === 0) return null
+              const isSel = selectedDay && isSameDay(d, selectedDay)
+              if (dayTasks.length === 0 && !isSel) return null
               
               return (
-                <div key={d.toISOString()} className="space-y-3">
+                <div key={d.toISOString()} className={`space-y-3 p-4 rounded-3xl transition-all ${isSel ? 'bg-white/5 ring-1 ring-white/10' : ''}`}>
                   <div className="flex items-center gap-4">
-                    <div className={`flex h-12 w-12 flex-col items-center justify-center rounded-2xl border ${isToday(d) ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]' : 'border-white/5 bg-white/5 text-white/40'}`}>
+                    <div className={`flex h-12 w-12 flex-col items-center justify-center rounded-2xl border ${isToday(d) ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]' : isSel ? 'border-white/20 bg-white/10 text-white' : 'border-white/5 bg-white/5 text-white/40'}`}>
                       <span className="text-xs font-black uppercase">{format(d, 'EEE')}</span>
                       <span className="text-lg font-black leading-none">{format(d, 'd')}</span>
                     </div>
-                    <div className="h-px flex-1 bg-white/5" />
+                    <div className="flex-1">
+                      <div className="h-px w-full bg-white/5" />
+                    </div>
                   </div>
                   
                   <div className="grid gap-3 pl-16">

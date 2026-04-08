@@ -118,7 +118,7 @@ export function DatePicker({ value, onChange, label }: DatePickerProps) {
     : ''
 
   return (
-    <div className="space-y-2" ref={ref}>
+    <div className="space-y-2 relative" ref={ref}>
       {label && (
         <label className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4F5B76]">{label}</label>
       )}
@@ -147,12 +147,8 @@ export function DatePicker({ value, onChange, label }: DatePickerProps) {
 
       {/* Calendar Dropdown */}
       {open && (
-        <div className="fixed z-[9999] w-[320px] rounded-2xl border border-white/10 bg-[#0F1219] shadow-2xl shadow-black/60 p-5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200"
-          style={{
-            top: ref.current ? ref.current.getBoundingClientRect().bottom + 8 : 0,
-            left: ref.current ? Math.min(ref.current.getBoundingClientRect().left, window.innerWidth - 340) : 0,
-          }}
-        >
+        <div className="absolute top-full left-0 sm:left-auto sm:right-0 z-[160] mt-2 w-[310px] rounded-2xl border border-white/10 bg-[#0F1219] shadow-2xl shadow-black/80 p-5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+
           {/* Month/Year Nav */}
           <div className="flex items-center justify-between">
             <button

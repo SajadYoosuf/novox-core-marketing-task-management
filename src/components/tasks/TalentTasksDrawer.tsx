@@ -42,16 +42,20 @@ export function TalentTasksDrawer({ userId, onClose, onTaskClick }: TalentTasksD
           .from('subtasks')
           .select('*')
 
-        // Filter to tasks where this user is the creator or assigned via subtasks
+        const { data: allAssignees } = await supabase
+          .from('task_assignees')
+          .select('*, profiles:user_id(*)')
+
+        // Filter to tasks where this user is the creator, assigned via task_assignees, or subtasks
         const assembled = (allTasks ?? []).map(t => ({
           ...t,
           subtasks: (allSubtasks ?? []).filter(s => s.task_id === t.id),
-          task_assignees: [],
-          task_platforms: [],
+          task_assignees: (allAssignees ?? []).filter(a => a.task_id === t.id),
         })) as TaskWithRelations[]
 
         const filtered = assembled.filter(task =>
           task.created_by === userId ||
+          task.task_assignees?.some(a => a.user_id === userId) ||
           task.subtasks?.some(s => s.assigned_user_id === userId)
         )
 

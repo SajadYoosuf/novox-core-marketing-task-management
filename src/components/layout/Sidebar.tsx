@@ -20,12 +20,12 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
       : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)]',
   )
 
-export function Sidebar({ 
-  isOpen, 
-  onClose 
-}: { 
-  isOpen?: boolean; 
-  onClose?: () => void 
+export function Sidebar({
+  isOpen,
+  onClose
+}: {
+  isOpen?: boolean;
+  onClose?: () => void
 }) {
   const profile = useAuthStore((s) => s.profile)
 
@@ -41,15 +41,15 @@ export function Sidebar({
           </div>
           <div className="flex flex-col">
             <span className="text-base font-bold leading-none tracking-tight text-[var(--color-text)]">
-              Novox
+              Novox Core
             </span>
             <span className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)] opacity-60">
-              Workflow Manager
+              Task Manager
             </span>
           </div>
         </div>
         {/* Mobile Close Button */}
-        <button 
+        <button
           onClick={onClose}
           className="rounded-lg p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text)] sm:hidden"
         >
@@ -65,9 +65,9 @@ export function Sidebar({
           { to: "/app/calendar", icon: CalendarDays, label: "Calendar" },
           { to: "/app/notifications", icon: Bell, label: "Notifications" },
         ].map((link) => (
-          <NavLink 
-            key={link.to} 
-            to={link.to} 
+          <NavLink
+            key={link.to}
+            to={link.to}
             className={linkClass}
             onClick={() => onClose?.()}
           >

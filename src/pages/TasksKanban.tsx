@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, Filter, LayoutGrid, Search, Users } from 'lucide-react'
+import { Plus, Filter, LayoutGrid, Search, Users, X } from 'lucide-react'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/Button'
@@ -33,58 +33,53 @@ export function TasksKanban() {
     setLoading(true)
 
     try {
-      const [taskRes, subtaskRes, assigneeRes, platformRes, cpRes, clientRes, profileRes] = await Promise.all([
-        supabase.from('tasks').select('*, clients(*)').order('updated_at', { ascending: false }),
+      // Fetch core tasks first
+      const { data: tasksData, error: tErr } = await supabase
+        .from('tasks')
+        .select('*, clients(*)')
+        .order('updated_at', { ascending: false })
+
+      if (tErr) {
+        console.error('Core tasks load failed:', tErr)
+        return
+      }
+
+      // Fetch supporting data separately to be resilient to schema misses
+      const [subtaskRes, assigneeRes, clientRes, profileRes] = await Promise.all([
         supabase.from('subtasks').select('*').order('sort_order'),
-        supabase.from('task_assignees').select('*'),
-        supabase.from('task_platforms').select('*'),
-        supabase.from('client_platforms').select('*'),
+        supabase.from('task_assignees').select('*, profiles:user_id(*)'),
         supabase.from('clients').select('*').order('name'),
         supabase.from('profiles').select('*').order('full_name'),
       ])
 
+      if (subtaskRes.error) console.warn('Subtasks load warning:', subtaskRes.error.message)
+      if (assigneeRes.error) console.warn('Assignees load warning:', assigneeRes.error.message)
+
       setClients((clientRes.data as Client[]) ?? [])
       setProfiles((profileRes.data as Profile[]) ?? [])
 
-      const cpMap = new Map((cpRes.data ?? []).map(cp => [cp.id, cp]))
-      const profMap = new Map((profileRes.data ?? []).map(p => [p.id, p]))
+      const safeSubtasks = subtaskRes.data ?? []
+      const safeAssignees = assigneeRes.data ?? []
 
-      const assembled = (taskRes.data ?? []).map(t => {
-        const tSubtasks = (subtaskRes.data ?? [])
+      const assembled = (tasksData || []).map(t => {
+        const tSubtasks = safeSubtasks
           .filter(s => s.task_id === t.id)
-          .map(s => ({ ...s, profiles: profMap.get(s.assigned_user_id) ?? null }))
-
-        const tPlatforms = (platformRes.data ?? [])
-          .filter(tp => tp.task_id === t.id)
-          .map(tp => {
-            const cp = cpMap.get(tp.client_platform_id)
-            return {
-              id: tp.id,
-              task_id: t.id,
-              title: `Post on ${PLATFORM_LABEL[cp?.platform as keyof typeof PLATFORM_LABEL] || 'Platform'}`,
-              is_done: tp.status === 'posted' || tp.status === 'completed',
-              assigned_user_id: tp.assigned_user_id,
-              profiles: profMap.get(tp.assigned_user_id) ?? null,
-              is_platform: true,
-              platform_status: tp.status
-            }
-          })
+          .map(s => ({
+            ...s,
+            is_platform: !!s.platform_type,
+            platform_status: s.status
+          }))
 
         return {
           ...t,
-          subtasks: [...tSubtasks, ...tPlatforms],
-          task_assignees: (assigneeRes.data ?? [])
-            .filter(a => a.task_id === t.id)
-            .map(a => ({ ...a, profiles: profMap.get(a.user_id) ?? null })),
-          task_platforms: (platformRes.data ?? [])
-            .filter(tp => tp.task_id === t.id)
-            .map(tp => ({ ...tp, client_platforms: cpMap.get(tp.client_platform_id) ?? null })),
+          subtasks: tSubtasks as any,
+          task_assignees: safeAssignees.filter(a => a.task_id === t.id),
         }
       }) as TaskWithRelations[]
 
       setTasks(assembled)
     } catch (err) {
-      console.error('Task load error:', err)
+      console.error('Fatal Board load error:', err)
     } finally {
       setLoading(false)
     }
@@ -99,8 +94,8 @@ export function TasksKanban() {
     let list = tasks
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
-      list = list.filter(t => 
-        t.title.toLowerCase().includes(q) || 
+      list = list.filter(t =>
+        t.title.toLowerCase().includes(q) ||
         t.clients?.name?.toLowerCase().includes(q) ||
         t.subtasks?.some(s => s.title.toLowerCase().includes(q))
       )
@@ -108,20 +103,17 @@ export function TasksKanban() {
     if (filterClient) list = list.filter((t) => t.client_id === filterClient)
     if (filterPlatform) {
       if (filterPlatform === 'creative') {
-        // Show only tasks that have creative subtasks (not linked to platforms)
         list = list.filter((t) =>
-           t.subtasks?.some(s => !(s as any).is_platform)
+          t.subtasks?.some(s => !s.platform_type)
         )
       } else {
-        // Show tasks linked to that platform (directly or through subtasks)
         list = list.filter((t) =>
-          t.subtasks?.some(s => (s as any).is_platform && (s as any).client_platforms?.platform === filterPlatform) ||
-          t.task_platforms?.some(tp => (tp.client_platforms as any)?.platform === filterPlatform)
+          t.subtasks?.some(s => s.platform_type === filterPlatform)
         )
       }
     }
     if (filterAssignee) {
-      list = list.filter((t) => 
+      list = list.filter((t) =>
         t.task_assignees?.some(a => a.user_id === filterAssignee) ||
         t.subtasks?.some(s => s.assigned_user_id === filterAssignee)
       )
@@ -157,18 +149,17 @@ export function TasksKanban() {
       }
     }
 
-    // Still refetch to ensure everything is in sync (subtasks, etc)
     void load()
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-8 pb-20 animate-in fade-in duration-700">
+    <div className="mx-auto w-full max-w-[1400px] space-y-10 pb-20 animate-in fade-in duration-700">
       {/* Header Section */}
       <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between pt-8">
         <div>
           <h1 className="text-4xl font-black tracking-tight text-[var(--color-text)] lg:text-5xl">Tasks</h1>
           <p className="mt-3 text-lg font-medium text-[var(--color-text-muted)] opacity-60 leading-relaxed">
-            {tasks.filter(t => t.status !== 'completed').length} active tasks
+            Manage your marketing workflow across {clients.length} brands and {profiles.filter(p => p.role !== 'admin').length} team members.
           </p>
         </div>
 
@@ -186,7 +177,7 @@ export function TasksKanban() {
       {/* Filter Bar */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-white/5 pt-6">
         <div className="flex flex-wrap items-center gap-3">
-          <CustomDropdown 
+          <CustomDropdown
             options={clients.map(c => ({ id: c.id, name: c.name }))}
             value={filterClient}
             onChange={setFilterClient}
@@ -194,7 +185,7 @@ export function TasksKanban() {
             icon={<Filter className="h-4 w-4" />}
           />
 
-          <CustomDropdown 
+          <CustomDropdown
             options={[
               { id: 'creative', name: 'Creative Design' },
               ...Object.entries(PLATFORM_LABEL || {}).map(([id, name]) => ({ id, name }))
@@ -205,7 +196,7 @@ export function TasksKanban() {
             icon={<LayoutGrid className="h-4 w-4" />}
           />
 
-          <CustomDropdown 
+          <CustomDropdown
             options={profiles.map(p => ({ id: p.id, name: p.full_name }))}
             value={filterAssignee}
             onChange={setFilterAssignee}
@@ -218,7 +209,7 @@ export function TasksKanban() {
           <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
           <input
             type="text"
-            placeholder="Search tasks..."
+            placeholder="Search Tasks..."
             className="h-11 w-full rounded-2xl border border-white/5 bg-white/[0.03] pl-11 pr-4 text-[10px] font-black uppercase tracking-widest text-[var(--color-text)] focus:bg-[#0B0D13] focus:ring-4 ring-indigo-500/20 placeholder:text-[#4F5B76]/40"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -232,22 +223,6 @@ export function TasksKanban() {
         </div>
       ) : (
         <div className="py-4 space-y-4">
-          {/* Mobile Column Picker */}
-          <div className="flex sm:hidden overflow-x-auto pb-4 gap-2 scrollbar-hide snap-x">
-             {KANBAN_COLUMNS.map((status) => (
-               <button
-                 key={status}
-                 onClick={() => {
-                    const el = document.getElementById(`col-container-${status}`)
-                    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-                 }}
-                 className="flex-none px-4 py-2 rounded-full border border-white/5 bg-white/5 text-[9px] font-black uppercase tracking-widest text-white/40 hover:text-white hover:bg-[var(--color-accent)]/20 transition-all snap-center"
-               >
-                 {STATUS_LABEL[status]}
-               </button>
-             ))}
-          </div>
-          
           <KanbanBoard
             tasks={filtered}
             onStatusChange={onStatusChange}

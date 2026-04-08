@@ -21,12 +21,30 @@
   --color-accent-hover: oklch(0.75 0.2 280);
 }
 
+
+/* Modern Scrollbars Customization */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Base cleanup */
 html {
-  @apply antialiased;
+  @apply antialiased scroll-smooth;
 }
 
 body {
-  @apply m-0 min-h-svh bg-[var(--color-surface)] text-[var(--color-text)];
+  @apply m-0 min-h-svh bg-[#0B0D13] text-[var(--color-text)];
   font-family: var(--font-sans);
 }
 

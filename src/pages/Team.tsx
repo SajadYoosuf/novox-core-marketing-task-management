@@ -115,9 +115,15 @@ export function Team() {
           const userTasks = safeTasks.filter(t => userTaskIds.has(t.id))
           
           const activeCount = userTasks.filter(t => 
-            t.status === 'in_progress' || t.status === 'review' || t.status === 'scheduled' || t.status === 'pending'
+            t.status === 'in_progress' || t.status === 'review'
           ).length
-          const pendingCount = userTasks.filter(t => t.status === 'pending').length
+          const todoCount = userTasks.filter(t => t.status === 'pending').length
+          const doneTasksCount = userTasks.filter(t => 
+            ['approved', 'scheduled', 'posted', 'completed'].includes(t.status)
+          ).length
+
+          // Final Done Count is subtasks + platforms + whole tasks that are completed
+          const finalDone = doneCount + doneTasksCount
 
           // Performance logic (Historical)
           const total = legacyDone + delayed + reject
@@ -125,9 +131,9 @@ export function Team() {
           const performance = total === 0 ? 0 : Math.min(100, Math.round(base + (doneCount * 2)))
 
           map.set(m.id, { 
-            done: doneCount, 
+            done: finalDone, 
             active: activeCount, 
-            pending: pendingCount, 
+            pending: todoCount, 
             performance 
           })
         })
@@ -276,7 +282,7 @@ export function Team() {
                   {[
                     { label: 'Done', val: stats.done, color: 'text-emerald-500 bg-emerald-500/5' },
                     { label: 'Active', val: stats.active, color: 'text-indigo-500 bg-indigo-500/5' },
-                    { label: 'Pending', val: stats.pending, color: 'text-amber-500 bg-amber-500/5' }
+                    { label: 'Todo', val: stats.pending, color: 'text-blue-500 bg-blue-500/5' }
                   ].map(s => (
                     <div key={s.label} className={`rounded-xl p-3 text-center transition-colors group-hover:bg-white/5 ${s.color}`}>
                       <span className="block text-xl font-black">{s.val}</span>

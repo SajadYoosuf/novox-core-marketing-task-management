@@ -38,5 +38,6 @@ export const KANBAN_COLUMNS: TaskStatus[] = [
   'approved',
   'scheduled',
   'posted',
+  'completed',
 ]
 
