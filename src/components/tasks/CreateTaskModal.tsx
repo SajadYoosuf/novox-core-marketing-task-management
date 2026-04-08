@@ -45,7 +45,6 @@ export function CreateTaskModal({
   const [currentAssigneeId, setCurrentAssigneeId] = useState('')
 
   // UI State
-  const [platformLoading, setPlatformLoading] = useState(false)
   const [platforms, setPlatforms] = useState<ClientPlatform[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
@@ -94,7 +93,6 @@ export function CreateTaskModal({
       setPlatforms([])
       return
     }
-    setPlatformLoading(true)
     void (async () => {
       try {
         const { data } = await supabase
@@ -106,7 +104,6 @@ export function CreateTaskModal({
         setPlatforms(activePlatforms)
         if (activePlatforms.length > 0) setSelectedPlatformIds(activePlatforms.map(p => p.id))
       } finally {
-        setPlatformLoading(false)
       }
     })()
   }, [clientId])

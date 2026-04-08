@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus, Filter, LayoutGrid, Search, Users, X } from 'lucide-react'
+import { Plus, Filter, LayoutGrid, Search, Users } from 'lucide-react'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { Button } from '@/components/ui/Button'
@@ -9,9 +9,8 @@ import { TaskDetailDrawer } from '@/components/tasks/TaskDetailDrawer'
 import { TalentTasksDrawer } from '@/components/tasks/TalentTasksDrawer'
 import { CustomDropdown } from '@/components/ui/CustomDropdown'
 import type { Client, TaskWithRelations, Profile } from '@/types/db'
-import { PLATFORM_LABEL, STATUS_LABEL } from '@/lib/constants'
+import { PLATFORM_LABEL } from '@/lib/constants'
 import { logPerformance } from '@/lib/performance'
-import { KANBAN_COLUMNS } from '@/lib/taskWorkflow'
 
 export function TasksKanban() {
   const user = useAuthStore((s) => s.user)

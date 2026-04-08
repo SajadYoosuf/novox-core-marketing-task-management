@@ -90,6 +90,15 @@ export interface Subtask {
   profiles?: Profile | null
 }
 
+export interface TaskPlatformRow {
+  id: string
+  task_id: string
+  client_platform_id: string
+  assigned_user_id: string | null
+  status: TaskStatus
+  client_platforms?: ClientPlatform | null
+}
+
 export interface Submission {
   id: string
   task_platform_id: string
