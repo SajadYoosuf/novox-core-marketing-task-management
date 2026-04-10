@@ -14,6 +14,7 @@ import { Calendar } from '@/pages/Calendar'
 import { TaskDetail } from '@/pages/TaskDetail'
 import { Notifications } from '@/pages/Notifications'
 import { Team } from '@/pages/Team'
+import { ContentManagement } from '@/pages/ContentManagement'
 
 function Protected({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user)
@@ -92,6 +93,7 @@ export default function App() {
           <Route path="tasks" element={<TasksKanban />} />
           <Route path="tasks/:id" element={<TaskDetail />} />
           <Route path="calendar" element={<Calendar />} />
+          <Route path="content" element={<ContentManagement />} />
           <Route path="notifications" element={<Notifications />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

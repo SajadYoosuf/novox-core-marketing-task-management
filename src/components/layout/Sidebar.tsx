@@ -8,6 +8,7 @@ import {
   Bell,
   Rocket,
   X,
+  FileVideo
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuthStore } from '@/stores/authStore'
@@ -63,6 +64,7 @@ export function Sidebar({
           { to: "/app/team", icon: UserCog, label: "Team" },
           { to: "/app/tasks", icon: KanbanSquare, label: "Tasks" },
           { to: "/app/calendar", icon: CalendarDays, label: "Calendar" },
+          { to: "/app/content", icon: FileVideo, label: "Content" },
           { to: "/app/notifications", icon: Bell, label: "Notifications" },
         ].map((link) => (
           <NavLink
