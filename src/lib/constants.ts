@@ -41,6 +41,8 @@ export const TASK_CONTENT_TYPES = [
   'gallery_images',
   'website_blog',
   'website_content',
+  'design_only',
+  'other',
 ] as const
 export type TaskContentType = (typeof TASK_CONTENT_TYPES)[number]
 
@@ -54,6 +56,8 @@ export const TASK_CONTENT_TYPE_LABELS: Record<TaskContentType, string> = {
   gallery_images: 'Gallery Images',
   website_blog: 'Website Blog',
   website_content: 'Website Content',
+  design_only: 'Design Only',
+  other: 'Other',
 }
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {

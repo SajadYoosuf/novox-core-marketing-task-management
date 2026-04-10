@@ -128,6 +128,7 @@ export function CreateTaskModal({
 
 
   const isWebsiteWork = contentType?.startsWith('website_') || contentType?.startsWith('gallery_images')
+  const isCustomWork = contentType === 'design_only' || contentType === 'other'
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -148,7 +149,12 @@ export function CreateTaskModal({
       return
     }
 
-    if (isWebsiteWork) {
+    if (isCustomWork) {
+      if (subtaskDrafts.length === 0) {
+        alert('Please add at least one unit of work (subtask) for custom tasks.')
+        return
+      }
+    } else if (isWebsiteWork) {
       if (!marketerId) {
         alert('Please assign a Website Task Lead.')
         return
@@ -198,7 +204,9 @@ export function CreateTaskModal({
       // 1. Generate Core Subtasks
       const subtasksToInsert: any[] = []
 
-      if (isWebsiteWork) {
+      if (isCustomWork) {
+        // Custom work does not generate any preset core subtasks
+      } else if (isWebsiteWork) {
         // Website work only gets a single subtask
         subtasksToInsert.push({
           task_id: taskId,
@@ -359,6 +367,7 @@ export function CreateTaskModal({
           </div>
 
           {/* SQUAD ASSIGNMENT SECTION */}
+          {!isCustomWork && (
           <div className="lg:col-span-12 space-y-6 pt-4">
             <div className="flex items-center gap-4 mb-4">
               <div className="h-[1px] flex-1 bg-white/5" />
@@ -503,6 +512,7 @@ export function CreateTaskModal({
               </div>
             </div>
           </div>
+          )}
 
           {/* Operational Workflow Section */}
           <div className="lg:col-span-12 space-y-8 pt-8">
