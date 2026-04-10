@@ -127,10 +127,7 @@ export function CreateTaskModal({
   }
 
 
-  const isWebsiteWork = contentType?.startsWith('website_') || contentType?.startsWith('gallery_images') || selectedPlatformIds.some(pid => {
-    const p = platforms.find(x => x.id === pid)
-    return p?.platform === 'website'
-  })
+  const isWebsiteWork = contentType?.startsWith('website_') || contentType?.startsWith('gallery_images')
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -151,6 +148,22 @@ export function CreateTaskModal({
       return
     }
 
+    if (isWebsiteWork) {
+      if (!marketerId) {
+        alert('Please assign a Website Task Lead.')
+        return
+      }
+    } else {
+      if (!designerId) {
+        alert('Please assign a Designer.')
+        return
+      }
+      if (!marketerId) {
+        alert('Please assign a Marketer.')
+        return
+      }
+    }
+
     try {
       console.log('Creating task...')
       const { data: task, error: tErr } = await supabase
@@ -161,7 +174,7 @@ export function CreateTaskModal({
           description: description.trim() || null,
           priority,
           content_type: contentType,
-          deadline: deadline ? new Date(deadline).toISOString() : null,
+          deadline: deadline ? new Date(deadline).toISOString() : new Date().toISOString(),
           status: 'pending',
           created_by: userId,
         })
@@ -242,8 +255,11 @@ export function CreateTaskModal({
       }
 
       // 2. Add all unique assignees to task_assignees for easy notification management
-      const uniqueAssignees = Array.from(new Set([designerId, marketerId, ...subtaskDrafts.map(d => d.assigneeId)]))
-        .filter(id => id && id.length > 10)
+      const uniqueAssignees = Array.from(new Set([
+        ...(isWebsiteWork ? [] : [designerId]), 
+        marketerId, 
+        ...subtaskDrafts.map(d => d.assigneeId)
+      ])).filter(id => id && id.length > 10)
 
       if (uniqueAssignees.length > 0) {
         await supabase.from('task_assignees').insert(

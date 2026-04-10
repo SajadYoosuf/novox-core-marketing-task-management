@@ -22,7 +22,7 @@ import { format, parseISO } from 'date-fns'
 import { STATUS_LABEL, PLATFORM_ICON, PLATFORM_LABEL } from '@/lib/constants'
 import { KANBAN_COLUMNS } from '@/lib/taskWorkflow'
 import { CustomDropdown } from '@/components/ui/CustomDropdown'
-
+import { useAuthStore } from '@/stores/authStore'
 interface TaskDetailDrawerProps {
   taskId: string | null
   onClose: () => void
@@ -30,6 +30,7 @@ interface TaskDetailDrawerProps {
 }
 
 export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawerProps) {
+  const user = useAuthStore((s) => s.user)
   const [task, setTask] = useState<TaskWithRelations | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -108,6 +109,11 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
 
   const toggleSubtask = async (st: any) => {
     if (!supabaseConfigured || !task) return
+
+    if (st.assigned_user_id && user && st.assigned_user_id !== user.id) {
+      alert('You cannot perform this task as it is assigned to another user.')
+      return
+    }
 
     const newIsDone = !st.is_done
     const newStatus = newIsDone ? 'completed' : 'pending'
@@ -196,12 +202,27 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
       description: draft.description,
       priority: draft.priority,
       status: draft.status,
-      deadline: draft.deadline,
+      deadline: draft.deadline || new Date().toISOString(),
     }).eq('id', taskId)
 
     setEditing(false)
     if (taskId) void loadTask(taskId)
     onUpdate()
+  }
+
+  const deleteTask = async () => {
+    if (!supabaseConfigured || !taskId || !confirm('Are you certain you want to permanently delete this task?')) return
+    
+    setLoading(true)
+    try {
+      await supabase.from('tasks').delete().eq('id', taskId)
+      onUpdate()
+      onClose()
+    } catch (err: any) {
+      console.error('Failed to delete task:', err)
+      alert(`Failed to delete task: ${err.message}`)
+      setLoading(false)
+    }
   }
 
   const totalSubtasks = task?.subtasks?.length || 0
@@ -443,14 +464,22 @@ export function TaskDetailDrawer({ taskId, onClose, onUpdate }: TaskDetailDrawer
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t border-white/5">
+            <div className="p-6 border-t border-white/5 space-y-3">
               {editing ? (
-                <Button
-                  onClick={save}
-                  className="h-12 w-full rounded-xl bg-emerald-500 text-xs font-bold uppercase tracking-widest text-white shadow-lg shadow-emerald-500/10"
-                >
-                  Save Global State
-                </Button>
+                <>
+                  <Button
+                    onClick={save}
+                    className="h-12 w-full rounded-xl bg-emerald-500 text-xs font-bold uppercase tracking-widest text-white shadow-lg shadow-emerald-500/10"
+                  >
+                    Save Global State
+                  </Button>
+                  <Button
+                    onClick={deleteTask}
+                    className="h-12 w-full rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/10 text-xs font-bold uppercase tracking-widest text-rose-500 transition-all"
+                  >
+                    Delete Task
+                  </Button>
+                </>
               ) : (
                 <Button
                   onClick={onClose}
