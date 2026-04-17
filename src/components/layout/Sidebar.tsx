@@ -42,7 +42,7 @@ export function Sidebar({
           </div>
           <div className="flex flex-col">
             <span className="text-base font-bold leading-none tracking-tight text-[var(--color-text)]">
-              Novox Core
+              Novox Edtech
             </span>
             <span className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--color-text-muted)] opacity-60">
               Task Manager
