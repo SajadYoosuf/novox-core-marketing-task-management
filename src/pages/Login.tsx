@@ -59,7 +59,7 @@ export function Login() {
       <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-lg">
         <div className="mb-8 flex items-center gap-2">
           <Sparkles className="h-8 w-8 text-[var(--color-accent)]" />
-          <span className="text-xl font-semibold text-[var(--color-text)]">Novox Core Marketing</span>
+          <span className="text-xl font-semibold text-[var(--color-text)]">Novox Edtech Marketing</span>
         </div>
         <h1 className="mb-6 text-lg font-medium text-[var(--color-text)]">
           {mode === 'login' ? 'Sign in' : 'Create account'}
